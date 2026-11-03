@@ -182,6 +182,59 @@ static void fill_rect(u32 x, u32 y, u32 width, u32 height, u32 color) {
             pixel(x + xx, y + yy, color);
 }
 
+
+/* Compact 5x7 font for readable Orbit UI labels (uppercase and digits). */
+static const u8 font[36][5] = {
+    {0x7E,0x11,0x11,0x11,0x7E}, {0x7F,0x49,0x49,0x49,0x36},
+    {0x3E,0x41,0x41,0x41,0x22}, {0x7F,0x41,0x41,0x22,0x1C},
+    {0x7F,0x49,0x49,0x49,0x41}, {0x7F,0x09,0x09,0x09,0x01},
+    {0x3E,0x41,0x49,0x49,0x7A}, {0x7F,0x08,0x08,0x08,0x7F},
+    {0x00,0x41,0x7F,0x41,0x00}, {0x20,0x40,0x41,0x3F,0x01},
+    {0x7F,0x08,0x14,0x22,0x41}, {0x7F,0x40,0x40,0x40,0x40},
+    {0x7F,0x02,0x0C,0x02,0x7F}, {0x7F,0x04,0x08,0x10,0x7F},
+    {0x3E,0x41,0x41,0x41,0x3E}, {0x7F,0x09,0x09,0x09,0x06},
+    {0x3E,0x41,0x51,0x21,0x5E}, {0x7F,0x09,0x19,0x29,0x46},
+    {0x46,0x49,0x49,0x49,0x31}, {0x01,0x01,0x7F,0x01,0x01},
+    {0x3F,0x40,0x40,0x40,0x3F}, {0x1F,0x20,0x40,0x20,0x1F},
+    {0x3F,0x40,0x38,0x40,0x3F}, {0x63,0x14,0x08,0x14,0x63},
+    {0x07,0x08,0x70,0x08,0x07}, {0x61,0x51,0x49,0x45,0x43},
+    {0x3E,0x51,0x49,0x45,0x3E}, {0x00,0x42,0x7F,0x40,0x00},
+    {0x62,0x51,0x49,0x49,0x46}, {0x22,0x41,0x49,0x49,0x36},
+    {0x18,0x14,0x12,0x7F,0x10}, {0x2F,0x49,0x49,0x49,0x31},
+    {0x3E,0x49,0x49,0x49,0x32}, {0x01,0x71,0x09,0x05,0x03},
+    {0x36,0x49,0x49,0x49,0x36}, {0x26,0x49,0x49,0x49,0x3E}
+};
+
+static int glyph_index(char c) {
+    if (c >= 'a' && c <= 'z') c = (char)(c - 'a' + 'A');
+    if (c >= 'A' && c <= 'Z') return c - 'A';
+    if (c >= '0' && c <= '9') return 26 + c - '0';
+    return -1;
+}
+
+static void draw_char(char c, u32 x, u32 y, u32 scale, u32 color) {
+    int index = glyph_index(c);
+    if (index < 0) return;
+    for (u32 column = 0; column < 5; column++) {
+        for (u32 row = 0; row < 7; row++) {
+            if (font[index][column] & (1u << row))
+                fill_rect(x + column * scale, y + row * scale, scale, scale, color);
+        }
+    }
+}
+
+static void draw_string(const char* text, u32 x, u32 y, u32 scale, u32 color) {
+    while (*text) {
+        if (*text == ' ') x += 4 * scale;
+        else {
+            draw_char(*text, x, y, scale, color);
+            x += 7 * scale;
+        }
+        text++;
+        if (x >= fb.width) break;
+    }
+}
+
 static void draw_orbit_desktop(void) {
     /* Deep-blue Orbit wallpaper with a soft diagonal color shift. */
     for (u32 y = 0; y < fb.height; y++) {
@@ -197,13 +250,16 @@ static void draw_orbit_desktop(void) {
     fill_rect(0, 0, fb.width, 42, rgb(10, 17, 36));
     fill_rect(18, 12, 18, 18, rgb(65, 155, 255));
     fill_rect(23, 16, 8, 10, rgb(235, 245, 255));
-    fill_rect(fb.width > 170 ? fb.width - 150 : 20, 18, 110, 5, rgb(95, 125, 170));
+    draw_string("BLUEAPPLE", 48, 16, 2, rgb(225, 238, 255));
+    draw_string("ORBIT", fb.width > 170 ? fb.width - 112 : 20, 16, 2, rgb(145, 180, 230));
 
     /* Desktop shortcut tiles */
     fill_rect(42, 82, 48, 48, rgb(30, 75, 135));
     fill_rect(52, 92, 28, 28, rgb(95, 175, 255));
     fill_rect(42, 150, 48, 48, rgb(30, 75, 135));
     fill_rect(53, 161, 26, 26, rgb(110, 220, 190));
+    draw_string("FILES", 42, 136, 1, rgb(245, 248, 255));
+    draw_string("SETTINGS", 35, 204, 1, rgb(245, 248, 255));
 
     /* BlueDock */
     u32 dock_width = fb.width < 620 ? fb.width - 24 : 560;
@@ -212,12 +268,17 @@ static void draw_orbit_desktop(void) {
     fill_rect(dock_x, dock_y, dock_width, 54, rgb(14, 24, 48));
     for (u32 i = 0; i < 5; i++) {
         u32 icon_x = dock_x + 18 + i * 66;
-        fill_rect(icon_x, dock_y + 11, 32, 32,
+        fill_rect(icon_x, dock_y + 8, 32, 32,
                   i == 0 ? rgb(65, 155, 255) :
                   (i == 1 ? rgb(90, 205, 175) :
                   (i == 2 ? rgb(225, 180, 85) :
                   (i == 3 ? rgb(175, 130, 245) : rgb(220, 230, 245)))));
     }
+    draw_string("MENU", dock_x + 17, dock_y + 43, 1, rgb(205, 220, 245));
+    draw_string("FILES", dock_x + 82, dock_y + 43, 1, rgb(205, 220, 245));
+    draw_string("TERM", dock_x + 148, dock_y + 43, 1, rgb(205, 220, 245));
+    draw_string("WEB", dock_x + 214, dock_y + 43, 1, rgb(205, 220, 245));
+    draw_string("SET", dock_x + 280, dock_y + 43, 1, rgb(205, 220, 245));
 }
 
 static void draw_text_console(void) {
