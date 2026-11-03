@@ -6,3 +6,6 @@ mode = LO
 
 # Allowed frame targets: 50, 100, or 150
 fps = 100
+
+# Local profile name shown in Orbit UI
+username = GUEST
