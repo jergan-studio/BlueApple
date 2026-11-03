@@ -326,6 +326,9 @@ static int drag_offset_y = 0;
 static int paint_points_x[96];
 static int paint_points_y[96];
 static u32 paint_point_count = 0;
+static char terminal_line[48];
+static u32 terminal_line_length = 0;
+static char terminal_output[48] = "TYPE HELP AND PRESS ENTER";
 
 static void window_bounds(u32* x, u32* y, u32* width, u32* height) {
     *width = fb.width > 620 ? 500 : fb.width - 40;
@@ -375,8 +378,10 @@ static void draw_active_window(void) {
     } else if (active_app == APP_TERMINAL) {
         draw_string("BLUEAPPLE TERMINAL", x + 24, y + 108, 1, rgb(105, 225, 175));
         draw_string("KERNEL SESSION ACTIVE", x + 24, y + 138, 1, rgb(225, 235, 250));
-        draw_string("KEYBOARD COMMAND LINE IS NEXT", x + 24, y + 168, 1, rgb(175, 195, 225));
-        draw_string("NO HOST SHELL ACCESS", x + 24, y + 198, 1, rgb(175, 195, 225));
+        draw_string("TYPE HELP AND PRESS ENTER", x + 24, y + 138, 1, rgb(175, 195, 225));
+        draw_string(">", x + 24, y + 178, 1, rgb(105, 225, 175));
+        draw_string(terminal_line, x + 38, y + 178, 1, rgb(240, 246, 255));
+        draw_string(terminal_output, x + 24, y + 214, 1, rgb(105, 225, 175));
     } else if (active_app == APP_WEB) {
         draw_string("ORBIT WEB // OFFLINE START PAGE", x + 24, y + 108, 1, rgb(225, 235, 250));
         draw_string("NETWORK DRIVER NOT INSTALLED", x + 24, y + 142, 1, rgb(175, 195, 225));
@@ -668,6 +673,102 @@ static void mouse_poll(void) {
     }
 }
 
+static int text_equals(const char* a, const char* b) {
+    while (*a && *b) {
+        if (*a != *b) return 0;
+        a++;
+        b++;
+    }
+    return *a == 0 && *b == 0;
+}
+
+static void terminal_execute(void) {
+    terminal_line[terminal_line_length] = 0;
+    if (text_equals(terminal_line, "HELP")) {
+        const char* s = "HELP ABOUT MODE FPS CLEAR";
+        u32 i = 0;
+        while (s[i] && i < sizeof(terminal_output) - 1) {
+            terminal_output[i] = s[i];
+            i++;
+        }
+        terminal_output[i] = 0;
+    } else if (text_equals(terminal_line, "ABOUT")) {
+        const char* s = "BLUEAPPLE ORBIT KERNEL";
+        u32 i = 0;
+        while (s[i] && i < sizeof(terminal_output) - 1) {
+            terminal_output[i] = s[i];
+            i++;
+        }
+        terminal_output[i] = 0;
+    } else if (text_equals(terminal_line, "MODE")) {
+        const char* s = boot_mode == 'L' ? "MODE LO LOCAL" :
+                        (boot_mode == '1' ? "MODE M1 USB LIVE" : "MODE M2 MACHINE");
+        u32 i = 0;
+        while (s[i] && i < sizeof(terminal_output) - 1) {
+            terminal_output[i] = s[i];
+            i++;
+        }
+        terminal_output[i] = 0;
+    } else if (text_equals(terminal_line, "FPS")) {
+        const char* s = target_fps == 50 ? "TARGET 50 FPS" :
+                        (target_fps == 150 ? "TARGET 150 FPS" : "TARGET 100 FPS");
+        u32 i = 0;
+        while (s[i] && i < sizeof(terminal_output) - 1) {
+            terminal_output[i] = s[i];
+            i++;
+        }
+        terminal_output[i] = 0;
+    } else if (text_equals(terminal_line, "CLEAR")) {
+        terminal_output[0] = 0;
+    } else {
+        const char* s = "UNKNOWN COMMAND";
+        u32 i = 0;
+        while (s[i] && i < sizeof(terminal_output) - 1) {
+            terminal_output[i] = s[i];
+            i++;
+        }
+        terminal_output[i] = 0;
+    }
+    terminal_line_length = 0;
+    terminal_line[0] = 0;
+}
+
+static char keyboard_character(u8 code) {
+    static const char keys[128] = {
+        [0x02]='1',[0x03]='2',[0x04]='3',[0x05]='4',[0x06]='5',
+        [0x07]='6',[0x08]='7',[0x09]='8',[0x0A]='9',[0x0B]='0',
+        [0x10]='Q',[0x11]='W',[0x12]='E',[0x13]='R',[0x14]='T',
+        [0x15]='Y',[0x16]='U',[0x17]='I',[0x18]='O',[0x19]='P',
+        [0x1E]='A',[0x1F]='S',[0x20]='D',[0x21]='F',[0x22]='G',
+        [0x23]='H',[0x24]='J',[0x25]='K',[0x26]='L',
+        [0x2C]='Z',[0x2D]='X',[0x2E]='C',[0x2F]='V',[0x30]='B',
+        [0x31]='N',[0x32]='M',[0x39]=' '
+    };
+    return code < 128 ? keys[code] : 0;
+}
+
+static void keyboard_poll(void) {
+    u8 status = inb(0x64);
+    if (!(status & 1) || (status & 0x20)) return;
+    u8 code = inb(0x60);
+    if (active_app != APP_TERMINAL || (code & 0x80)) return;
+    if (code == 0x1C) {
+        terminal_execute();
+    } else if (code == 0x0E) {
+        if (terminal_line_length) terminal_line[--terminal_line_length] = 0;
+    } else {
+        char ch = keyboard_character(code);
+        if (ch && terminal_line_length < sizeof(terminal_line) - 1) {
+            terminal_line[terminal_line_length++] = ch;
+            terminal_line[terminal_line_length] = 0;
+        }
+    }
+    cursor_restore();
+    render_desktop();
+    draw_mouse_coordinates();
+    cursor_draw();
+}
+
 static void draw_text_console(void) {
     clear_screen();
     print_at(" .--------------------------------------------------------------. ", 2, 8, 0x09);
@@ -690,6 +791,7 @@ void kernel_main(u32 magic, const multiboot_info_t* info) {
         cursor_draw();
         mouse_initialize();
         for (;;) {
+            keyboard_poll();
             mouse_poll();
             __asm__ volatile ("pause");
         }
