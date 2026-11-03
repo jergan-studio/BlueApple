@@ -25,7 +25,20 @@ If the config is missing or invalid, the kernel defaults to LO and 100 FPS.
 
 ## Current milestone
 
-The Multiboot 1 kernel reads the boot mode and FPS from `load.ol`, then displays the Orbit Console boot status. This is still a text-mode kernel test, not a finished graphical operating system.
+BlueApple now has an early framebuffer-based **Orbit desktop prototype**. It draws the Orbit Bar, desktop shortcuts, BlueDock, Orbit Menu, app windows, a guest mouse cursor, and an estimated X/Y coordinate HUD.
+
+The built-in app prototypes are:
+
+- **BlueFiles:** displays a small virtual system-file listing. Real disk and filesystem drivers are not implemented.
+- **BlueTerm:** displays terminal session status. Keyboard input and command execution are not implemented.
+- **Settings:** displays the active boot profile and configured FPS. Interactive settings changes are not implemented.
+- **Orbit Web:** displays an offline start page. Networking and web rendering are not implemented.
+- **Orbit Paint:** lets you click inside its canvas to place simple marks. This is an early drawing prototype, not a full paint program.
+- **About:** displays BlueApple/Orbit information.
+
+App windows can be opened from the dock, desktop shortcuts, or Orbit Menu, dragged by their title bars, and closed with the X control. The PS/2 mouse driver is polled by the kernel; its relative movement packets are accumulated into guest-screen coordinates. These are **BlueApple/QEMU guest coordinates**, not the Linux host desktop's absolute pointer coordinates.
+
+This remains an experimental kernel prototype, not a complete or daily-use operating system.
 
 ## Safety design
 
@@ -67,9 +80,10 @@ The ISO is created at `build/blueapple.iso`.
 ## Roadmap
 
 1. Configuration-aware LO/M1/M2 boot.
-2. Framebuffer graphics and keyboard input.
-3. Orbit desktop shell with its own navigation and window behavior.
-4. File manager, settings, and original BlueApple apps.
-5. USB hardware testing and persistent live-session options.
+2. Reliable mouse and keyboard input, including keyboard-driven terminal use.
+3. Window focus, resizing, and more complete Orbit desktop behavior.
+4. Real filesystem access for BlueFiles and command execution in BlueTerm.
+5. Drawing tools, networking, and more complete built-in apps.
+6. USB hardware testing and persistent live-session options.
 
 **Warning:** This is experimental software. Test in QEMU first. Do not use it as a daily operating system yet, and do not write experimental images to a USB containing files you need.
