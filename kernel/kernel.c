@@ -26,7 +26,7 @@ typedef struct {
     u32 mods_addr;
 } multiboot_info_t;
 
-static char boot_mode = '1';
+static char boot_mode = 'L';
 static u32 target_fps = 100;
 
 static void clear_screen(void) {
@@ -69,7 +69,9 @@ static void parse_config(const char* data, u32 length) {
             if (line[p] == '=') {
                 p++;
                 while (line[p] == ' ' || line[p] == '\t') p++;
-                if (line[p] == 'M' && (line[p + 1] == '1' || line[p + 1] == '2'))
+                if (line[p] == 'L' && line[p + 1] == 'O')
+                    boot_mode = 'L';
+                else if (line[p] == 'M' && (line[p + 1] == '1' || line[p + 1] == '2'))
                     boot_mode = line[p + 1];
             }
         } else if (starts_with(&line[p], "fps")) {
@@ -114,11 +116,16 @@ void kernel_main(u32 magic, const multiboot_info_t* info) {
 
     print_at("SYSTEM PROFILE", 8, 12, 0x0B);
     print_at("Boot mode :", 10, 12, 0x07);
-    print_at(boot_mode == '1' ? "M1 / USB LIVE" : "M2 / MACHINE", 10, 29, 0x0F);
+    print_at(boot_mode == 'L' ? "LO / LOCAL" : (boot_mode == '1' ? "M1 / USB LIVE" : "M2 / MACHINE"), 10, 29, 0x0F);
     print_at("Frame target :", 11, 12, 0x07);
     print_at(target_fps == 50 ? "50 FPS" : (target_fps == 150 ? "150 FPS" : "100 FPS"), 11, 29, 0x0F);
 
-    if (boot_mode == '1') {
+    if (boot_mode == 'L') {
+        print_at("LOCAL DEVELOPMENT SESSION", 14, 12, 0x0B);
+        print_at("BlueApple is running locally for development and testing.", 16, 12, 0x0F);
+        print_at("This profile is intended for VS Code and QEMU.", 17, 12, 0x0E);
+        print_at("No internal disk installation is performed.", 18, 12, 0x07);
+    } else if (boot_mode == '1') {
         print_at("LIVE SESSION", 14, 12, 0x0B);
         print_at("BlueApple is running as a temporary USB session.", 16, 12, 0x0F);
         print_at("This kernel does not write to the internal drive.", 17, 12, 0x0E);
