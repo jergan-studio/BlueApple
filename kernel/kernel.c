@@ -251,7 +251,7 @@ static void draw_orbit_desktop(void) {
     fill_rect(18, 12, 18, 18, rgb(65, 155, 255));
     fill_rect(23, 16, 8, 10, rgb(235, 245, 255));
     draw_string("BLUEAPPLE", 48, 16, 2, rgb(225, 238, 255));
-    draw_string("ORBIT", fb.width > 170 ? fb.width - 112 : 20, 16, 2, rgb(145, 180, 230));
+    draw_string("ORBIT UI", fb.width > 170 ? fb.width - 92 : 20, 16, 1, rgb(145, 180, 230));
 
     /* Desktop shortcut tiles */
     fill_rect(42, 82, 48, 48, rgb(30, 75, 135));
@@ -318,10 +318,28 @@ static const orbit_app_t* find_app(int id) {
 }
 static int active_app = APP_NONE;
 static int launcher_open = 0;
+static int window_x = -1;
+static int window_y = -1;
+static int window_dragging = 0;
+static int drag_offset_x = 0;
+static int drag_offset_y = 0;
+static int paint_points_x[96];
+static int paint_points_y[96];
+static u32 paint_point_count = 0;
+
+static void window_bounds(u32* x, u32* y, u32* width, u32* height) {
+    *width = fb.width > 620 ? 500 : fb.width - 40;
+    *height = fb.height > 390 ? 300 : fb.height - 100;
+    *x = window_x >= 0 ? (u32)window_x : (fb.width - *width) / 2;
+    *y = window_y >= 0 ? (u32)window_y : (fb.height - *height) / 2;
+}
 
 static void open_app(int app) {
     active_app = app;
     launcher_open = 0;
+    window_x = -1;
+    window_y = -1;
+    window_dragging = 0;
 }
 
 static void draw_active_window(void) {
@@ -329,11 +347,9 @@ static void draw_active_window(void) {
     const orbit_app_t* app = find_app(active_app);
     if (!app) return;
 
-    u32 width = fb.width > 620 ? 500 : fb.width - 40;
-    u32 height = fb.height > 390 ? 300 : fb.height - 100;
+    u32 width, height, x, y;
+    window_bounds(&x, &y, &width, &height);
     if (width < 220 || height < 130) return;
-    u32 x = (fb.width - width) / 2;
-    u32 y = (fb.height - height) / 2;
 
     fill_rect(x, y, width, height, rgb(20, 31, 55));
     fill_rect(x, y, width, 38, rgb(35, 57, 91));
@@ -343,20 +359,33 @@ static void draw_active_window(void) {
     draw_string(app->subtitle, x + 24, y + 68, 2, app->accent);
 
     if (active_app == APP_FILES) {
-        draw_string("YOUR FILES WILL APPEAR HERE", x + 24, y + 112, 1, rgb(225, 235, 250));
-        draw_string("STORAGE SUPPORT IS COMING", x + 24, y + 142, 1, rgb(175, 195, 225));
+        draw_string("BLUEAPPLE SYSTEM", x + 24, y + 108, 1, rgb(225, 235, 250));
+        draw_string("LOAD.OL", x + 34, y + 142, 1, rgb(105, 185, 255));
+        draw_string("BOOT CONFIGURATION", x + 132, y + 142, 1, rgb(185, 205, 230));
+        draw_string("BLUEAPPLE.ELF", x + 34, y + 170, 1, rgb(105, 185, 255));
+        draw_string("KERNEL IMAGE", x + 132, y + 170, 1, rgb(185, 205, 230));
+        draw_string("VIRTUAL VIEW - DISK DRIVER NOT READY", x + 24, y + 220, 1, rgb(175, 195, 225));
     } else if (active_app == APP_SETTINGS) {
-        draw_string("DISPLAY", x + 24, y + 112, 1, rgb(225, 235, 250));
-        draw_string("INPUT", x + 24, y + 142, 1, rgb(225, 235, 250));
-        draw_string("SYSTEM PROFILE", x + 24, y + 172, 1, rgb(225, 235, 250));
+        draw_string("DISPLAY PROFILE", x + 24, y + 108, 1, rgb(225, 235, 250));
+        draw_string("ORBIT BLUE THEME", x + 34, y + 138, 1, rgb(178, 138, 245));
+        draw_string("FRAME TARGET", x + 24, y + 174, 1, rgb(225, 235, 250));
+        draw_string(target_fps == 50 ? "50 FPS" : (target_fps == 150 ? "150 FPS" : "100 FPS"), x + 34, y + 198, 1, rgb(105, 225, 175));
+        draw_string("BOOT MODE", x + 24, y + 232, 1, rgb(225, 235, 250));
+        draw_string(boot_mode == 'L' ? "LOCAL" : (boot_mode == '1' ? "USB LIVE" : "MACHINE"), x + 110, y + 232, 1, rgb(225, 235, 250));
     } else if (active_app == APP_TERMINAL) {
-        draw_string("TERMINAL READY", x + 24, y + 112, 1, rgb(105, 225, 175));
-        draw_string("COMMAND SUPPORT IS COMING", x + 24, y + 142, 1, rgb(225, 235, 250));
+        draw_string("BLUEAPPLE TERMINAL", x + 24, y + 108, 1, rgb(105, 225, 175));
+        draw_string("KERNEL SESSION ACTIVE", x + 24, y + 138, 1, rgb(225, 235, 250));
+        draw_string("KEYBOARD COMMAND LINE IS NEXT", x + 24, y + 168, 1, rgb(175, 195, 225));
+        draw_string("NO HOST SHELL ACCESS", x + 24, y + 198, 1, rgb(175, 195, 225));
     } else if (active_app == APP_WEB) {
-        draw_string("NETWORK SUPPORT IS COMING", x + 24, y + 112, 1, rgb(225, 235, 250));
+        draw_string("ORBIT WEB // OFFLINE START PAGE", x + 24, y + 108, 1, rgb(225, 235, 250));
+        draw_string("NETWORK DRIVER NOT INSTALLED", x + 24, y + 142, 1, rgb(175, 195, 225));
+        draw_string("NO INTERNET CONNECTION", x + 24, y + 172, 1, rgb(175, 195, 225));
     } else if (active_app == APP_PAINT) {
         fill_rect(x + 24, y + 108, width - 48, height - 132, rgb(235, 239, 247));
-        draw_string("CANVAS READY", x + 34, y + 120, 1, rgb(35, 57, 91));
+        draw_string("CLICK CANVAS TO PAINT", x + 34, y + 90, 1, rgb(240, 246, 255));
+        for (u32 i = 0; i < paint_point_count; i++)
+            fill_rect(x + 24 + (u32)paint_points_x[i], y + 108 + (u32)paint_points_y[i], 5, 5, rgb(35, 105, 220));
     } else if (active_app == APP_ABOUT) {
         draw_string("A SMALL OS WITH A BIG FUTURE", x + 24, y + 112, 1, rgb(225, 235, 250));
         draw_string("ORBIT UI", x + 24, y + 142, 1, rgb(225, 235, 250));
@@ -424,13 +453,29 @@ static void desktop_click(int mouse_x, int mouse_y) {
     }
 
     if (active_app != APP_NONE) {
-        u32 width = fb.width > 620 ? 500 : fb.width - 40;
-        u32 height = fb.height > 390 ? 300 : fb.height - 100;
-        u32 x = (fb.width - width) / 2;
-        u32 y = (fb.height - height) / 2;
+        u32 width, height, x, y;
+        window_bounds(&x, &y, &width, &height);
         if (mouse_x >= (int)(x + width - 34) && mouse_x < (int)(x + width - 10) &&
-            mouse_y >= (int)(y + 7) && mouse_y < (int)(y + 31))
+            mouse_y >= (int)(y + 7) && mouse_y < (int)(y + 31)) {
             active_app = APP_NONE;
+            window_dragging = 0;
+            return;
+        }
+        if (mouse_x >= (int)x && mouse_x < (int)(x + width) &&
+            mouse_y >= (int)y && mouse_y < (int)(y + 38)) {
+            window_dragging = 1;
+            drag_offset_x = mouse_x - (int)x;
+            drag_offset_y = mouse_y - (int)y;
+            return;
+        }
+        if (active_app == APP_PAINT &&
+            mouse_x >= (int)(x + 24) && mouse_x < (int)(x + width - 24) &&
+            mouse_y >= (int)(y + 108) && mouse_y < (int)(y + height - 24) &&
+            paint_point_count < 96) {
+            paint_points_x[paint_point_count] = mouse_x - (int)x - 24;
+            paint_points_y[paint_point_count] = mouse_y - (int)y - 108;
+            paint_point_count++;
+        }
         return;
     }
 
@@ -476,11 +521,34 @@ static int mouse_read_ack(void) {
     return inb(0x60) == 0xFA;
 }
 static int mouse_initialize(void) {
+    /* Enable the auxiliary port while keeping interrupts disabled: this
+       kernel polls the controller and does not install an IRQ/IDT yet. */
     if (!mouse_wait_input()) return 0;
-    outb(0x64, 0xA8);       /* Enable auxiliary PS/2 device port. */
+    outb(0x64, 0xA8);
     io_wait();
-    if (!mouse_write(0xF4)) return 0; /* Enable mouse data reporting. */
-    return mouse_read_ack();
+
+    if (!mouse_wait_input()) return 0;
+    outb(0x64, 0x20);              /* Read controller command byte. */
+    if (!mouse_wait_output()) return 0;
+    u8 command = inb(0x60);
+    command = (u8)((command | 0x02) & (u8)~0x20);
+    if (!mouse_wait_input()) return 0;
+    outb(0x64, 0x60);              /* Write controller command byte. */
+    if (!mouse_wait_input()) return 0;
+    outb(0x60, command);
+
+    /* Drain stale controller bytes before starting a fresh mouse session. */
+    for (u32 i = 0; i < 32 && (inb(0x64) & 1); i++) (void)inb(0x60);
+
+    /* Reset, consume the reset self-test and device ID, then enable reporting. */
+    if (!mouse_write(0xFF) || !mouse_read_ack()) return 0;
+    if (!mouse_wait_output()) return 0;
+    (void)inb(0x60);               /* 0xAA self-test result */
+    if (!mouse_wait_output()) return 0;
+    (void)inb(0x60);               /* Mouse device ID */
+    if (!mouse_write(0xF6) || !mouse_read_ack()) return 0; /* Defaults */
+    if (!mouse_write(0xF4) || !mouse_read_ack()) return 0; /* Data reporting */
+    return 1;
 }
 
 #define CURSOR_W 12
@@ -507,12 +575,13 @@ static void draw_unsigned(u32 value, u32 x, u32 y, u32 color) {
 
 /* Guest pointer coordinates are estimated by accumulating PS/2 relative deltas. */
 static void draw_mouse_coordinates(void) {
-    u32 left = fb.width > 240 ? fb.width - 220 : 4;
-    fill_rect(left, 5, fb.width > 240 ? 216 : fb.width - 8, 30, rgb(10, 17, 36));
-    draw_string("X", left + 4, 15, 1, rgb(145, 180, 230));
-    draw_unsigned((u32)cursor_x, left + 18, 15, rgb(235, 245, 255));
-    draw_string("Y", left + 92, 15, 1, rgb(145, 180, 230));
-    draw_unsigned((u32)cursor_y, left + 106, 15, rgb(235, 245, 255));
+    /* Keep the coordinate HUD compact at the far right of the Orbit Bar. */
+    u32 left = fb.width > 260 ? fb.width - 126 : 4;
+    fill_rect(left, 7, fb.width > 260 ? 122 : fb.width - 8, 27, rgb(10, 17, 36));
+    draw_string("X", left + 4, 16, 1, rgb(145, 180, 230));
+    draw_unsigned((u32)cursor_x, left + 17, 16, rgb(235, 245, 255));
+    draw_string("Y", left + 66, 16, 1, rgb(145, 180, 230));
+    draw_unsigned((u32)cursor_y, left + 79, 16, rgb(235, 245, 255));
 }
 
 static const u16 cursor_shape[CURSOR_H] = {
@@ -547,20 +616,34 @@ static void cursor_draw(void) {
     cursor_visible = 1;
 }
 static void mouse_handle_packet(const u8 packet[3]) {
-    /* Ignore overflow packets; PS/2 reports signed 8-bit movement. */
-    if (packet[0] & 0xC0) return;
+    /* Bit 3 must be set in the first byte; overflow deltas are discarded. */
+    if (!(packet[0] & 0x08) || (packet[0] & 0xC0)) return;
     int dx = (int)packet[1] - ((packet[0] & 0x10) ? 256 : 0);
     int dy = (int)packet[2] - ((packet[0] & 0x20) ? 256 : 0);
+    u8 new_buttons = packet[0] & 0x07;
+    u8 pressed = new_buttons & (u8)~mouse_buttons;
+
     cursor_restore();
     cursor_x += dx;
     cursor_y -= dy;
     if (cursor_x < 0) cursor_x = 0;
     if (cursor_y < 0) cursor_y = 0;
-    if ((u32)cursor_x >= fb.width) cursor_x = (int)fb.width - 1;
-    if ((u32)cursor_y >= fb.height) cursor_y = (int)fb.height - 1;
+    if (fb.width && (u32)cursor_x >= fb.width) cursor_x = (int)fb.width - 1;
+    if (fb.height && (u32)cursor_y >= fb.height) cursor_y = (int)fb.height - 1;
 
-    u8 new_buttons = packet[0] & 0x07;
-    u8 pressed = new_buttons & (u8)~mouse_buttons;
+    if (window_dragging && (new_buttons & 0x01) && active_app != APP_NONE) {
+        u32 width, height, old_x, old_y;
+        window_bounds(&old_x, &old_y, &width, &height);
+        window_x = cursor_x - drag_offset_x;
+        window_y = cursor_y - drag_offset_y;
+        if (window_x < 0) window_x = 0;
+        if (window_y < 42) window_y = 42;
+        if ((u32)window_x + width > fb.width) window_x = (int)(fb.width - width);
+        if ((u32)window_y + height > fb.height - 54) window_y = (int)(fb.height - height - 54);
+        render_desktop();
+    }
+    if (window_dragging && !(new_buttons & 0x01)) window_dragging = 0;
+
     mouse_buttons = new_buttons;
     if (pressed & 0x01) {
         desktop_click(cursor_x, cursor_y);
@@ -573,9 +656,10 @@ static void mouse_poll(void) {
     static u8 packet[3];
     static u8 packet_index = 0;
     u8 status = inb(0x64);
+    /* Only consume bytes tagged as auxiliary-device (mouse) data. */
     if (!(status & 1) || !(status & 0x20)) return;
     u8 data = inb(0x60);
-    if (packet_index == 0 && !(data & 0x08)) return; /* Packet sync bit. */
+    if (packet_index == 0 && !(data & 0x08)) return;
     packet[packet_index++] = data;
     if (packet_index == 3) {
         packet_index = 0;
