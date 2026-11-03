@@ -68,6 +68,7 @@ typedef struct {
 
 static char boot_mode = 'L';
 static u32 target_fps = 100;
+static char current_username[16] = "GUEST";
 static framebuffer_t fb;
 
 static void clear_screen(void) {
@@ -122,6 +123,25 @@ static void parse_config(const char* data, u32 length) {
                 while (line[p] >= '0' && line[p] <= '9')
                     value = value * 10 + (u32)(line[p++] - '0');
                 if (value == 50 || value == 100 || value == 150) target_fps = value;
+            }
+        } else if (starts_with(&line[p], "username")) {
+            while (line[p] && line[p] != '=') p++;
+            if (line[p] == '=') {
+                p++;
+                while (line[p] == ' ' || line[p] == '\t') p++;
+                u32 n = 0;
+                while (line[p] && line[p] != '\r' && n < sizeof(current_username) - 1) {
+                    char ch = line[p++];
+                    if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+                        (ch >= '0' && ch <= '9') || ch == '_' || ch == '-')
+                        current_username[n++] = ch;
+                }
+                current_username[n] = 0;
+                if (!n) {
+                    current_username[0] = 'G'; current_username[1] = 'U';
+                    current_username[2] = 'E'; current_username[3] = 'S';
+                    current_username[4] = 'T'; current_username[5] = 0;
+                }
             }
         }
     }
@@ -251,7 +271,13 @@ static void draw_orbit_desktop(void) {
     fill_rect(18, 12, 18, 18, rgb(65, 155, 255));
     fill_rect(23, 16, 8, 10, rgb(235, 245, 255));
     draw_string("BLUEAPPLE", 48, 16, 2, rgb(225, 238, 255));
-    draw_string("DESKTOP", fb.width > 170 ? fb.width - 92 : 20, 16, 1, rgb(145, 180, 230));
+    draw_string(current_username, 180, 16, 1, rgb(190, 215, 245));
+    /* Small Wi-Fi status glyph: icon is present, radio support is a future driver. */
+    fill_rect(340, 22, 4, 4, rgb(130, 175, 225));
+    fill_rect(334, 18, 16, 3, rgb(130, 175, 225));
+    fill_rect(330, 14, 24, 3, rgb(130, 175, 225));
+    fill_rect(340, 29, 4, 4, rgb(130, 175, 225));
+    draw_string("WIFI", 360, 18, 1, rgb(145, 180, 230));
 
     /* Desktop shortcut tiles */
     fill_rect(42, 82, 48, 48, rgb(30, 75, 135));
@@ -266,19 +292,21 @@ static void draw_orbit_desktop(void) {
     u32 dock_x = (fb.width - dock_width) / 2;
     u32 dock_y = fb.height > 100 ? fb.height - 76 : 0;
     fill_rect(dock_x, dock_y, dock_width, 54, rgb(14, 24, 48));
-    for (u32 i = 0; i < 5; i++) {
+    for (u32 i = 0; i < 6; i++) {
         u32 icon_x = dock_x + 18 + i * 66;
         fill_rect(icon_x, dock_y + 8, 32, 32,
                   i == 0 ? rgb(65, 155, 255) :
                   (i == 1 ? rgb(90, 205, 175) :
                   (i == 2 ? rgb(225, 180, 85) :
-                  (i == 3 ? rgb(175, 130, 245) : rgb(220, 230, 245)))));
+                  (i == 3 ? rgb(175, 130, 245) :
+                  (i == 4 ? rgb(220, 230, 245) : rgb(105, 225, 175)))));
     }
     draw_string("MENU", dock_x + 17, dock_y + 43, 1, rgb(205, 220, 245));
     draw_string("FILES", dock_x + 82, dock_y + 43, 1, rgb(205, 220, 245));
     draw_string("TERM", dock_x + 148, dock_y + 43, 1, rgb(205, 220, 245));
     draw_string("WEB", dock_x + 214, dock_y + 43, 1, rgb(205, 220, 245));
     draw_string("SET", dock_x + 280, dock_y + 43, 1, rgb(205, 220, 245));
+    draw_string("MSG", dock_x + 346, dock_y + 43, 1, rgb(205, 220, 245));
 }
 
 
@@ -290,7 +318,10 @@ enum {
     APP_TERMINAL = 3,
     APP_WEB = 4,
     APP_PAINT = 5,
-    APP_ABOUT = 6
+    APP_ABOUT = 6,
+    APP_WIFI = 7,
+    APP_USERS = 8,
+    APP_MESSAGES = 9
 };
 
 typedef struct {
@@ -307,7 +338,10 @@ static const orbit_app_t orbit_apps[] = {
     { APP_SETTINGS, "SETTINGS", "CONTROL CENTER", 0xB28AF5 },
     { APP_WEB, "ORBIT WEB", "BROWSER", 0x8CCBFF },
     { APP_PAINT, "ORBIT PAINT", "DRAWING APP", 0xF0B85A },
-    { APP_ABOUT, "ABOUT", "BLUEAPPLE SYSTEM", 0x75D6C0 }
+    { APP_ABOUT, "ABOUT", "BLUEAPPLE SYSTEM", 0x75D6C0 },
+    { APP_WIFI, "WIFI", "WIRELESS NETWORKS", 0x70BFFF },
+    { APP_USERS, "USERS", "LOCAL USER PROFILES", 0xD5A5FF },
+    { APP_MESSAGES, "MESSAGES", "LOCAL MESSAGE CENTER", 0x75D6C0 }
 };
 #define ORBIT_APP_COUNT (sizeof(orbit_apps) / sizeof(orbit_apps[0]))
 
@@ -329,6 +363,9 @@ static u32 paint_point_count = 0;
 static char terminal_line[48];
 static u32 terminal_line_length = 0;
 static char terminal_output[48] = "TYPE HELP AND PRESS ENTER";
+static char message_draft[48];
+static u32 message_draft_length = 0;
+static char last_message[48] = "WELCOME TO BLUEAPPLE";
 
 static void window_bounds(u32* x, u32* y, u32* width, u32* height) {
     *width = fb.width > 620 ? 500 : fb.width - 40;
@@ -394,6 +431,26 @@ static void draw_active_window(void) {
         draw_string("A SMALL OS WITH A BIG FUTURE", x + 24, y + 112, 1, rgb(225, 235, 250));
         draw_string("ORBIT UI", x + 24, y + 142, 1, rgb(225, 235, 250));
         draw_string("BLUEAPPLE V1 IS IN DEVELOPMENT", x + 24, y + 172, 1, rgb(225, 235, 250));
+    } else if (active_app == APP_WIFI) {
+        draw_string("WIRELESS STATUS", x + 24, y + 108, 1, rgb(225, 235, 250));
+        draw_string("WIFI RADIO: NOT CONNECTED", x + 24, y + 140, 1, rgb(240, 185, 110));
+        draw_string("NO WIFI DEVICE DRIVER YET", x + 24, y + 172, 1, rgb(175, 195, 225));
+        draw_string("NETWORK SCANNING IS NOT ACTIVE", x + 24, y + 204, 1, rgb(175, 195, 225));
+        draw_string("ADAPTER SUPPORT IS NEXT", x + 24, y + 236, 1, rgb(105, 185, 255));
+    } else if (active_app == APP_USERS) {
+        draw_string("CURRENT PROFILE", x + 24, y + 108, 1, rgb(225, 235, 250));
+        draw_string(current_username, x + 24, y + 140, 2, rgb(105, 185, 255));
+        draw_string("LOCAL GUEST PROFILE", x + 24, y + 180, 1, rgb(175, 195, 225));
+        draw_string("EDIT load.ol TO CHANGE USERNAME", x + 24, y + 220, 1, rgb(175, 195, 225));
+    } else if (active_app == APP_MESSAGES) {
+        draw_string("INBOX", x + 24, y + 108, 1, rgb(225, 235, 250));
+        draw_string("SYSTEM", x + 24, y + 140, 1, rgb(105, 185, 255));
+        draw_string("WELCOME TO BLUEAPPLE", x + 100, y + 140, 1, rgb(225, 235, 250));
+        draw_string(current_username, x + 24, y + 174, 1, rgb(105, 225, 175));
+        draw_string(last_message, x + 100, y + 174, 1, rgb(225, 235, 250));
+        draw_string("NEW MESSAGE:", x + 24, y + 218, 1, rgb(175, 195, 225));
+        draw_string(message_draft, x + 24, y + 244, 1, rgb(240, 246, 255));
+        draw_string("ENTER TO SEND LOCALLY", x + 24, y + 270, 1, rgb(105, 225, 175));
     }
 }
 static void draw_launcher(void) {
@@ -426,7 +483,7 @@ static void desktop_click(int mouse_x, int mouse_y) {
 
     if ((u32)mouse_y >= dock_y && (u32)mouse_y < dock_y + 54) {
         int item = (mouse_x - (int)dock_x - 8) / 66;
-        if (mouse_x >= (int)dock_x + 8 && item >= 0 && item < 5) {
+        if (mouse_x >= (int)dock_x + 8 && item >= 0 && item < 6) {
             if (item == 0) {
                 active_app = APP_NONE;
                 launcher_open = !launcher_open;
@@ -434,6 +491,7 @@ static void desktop_click(int mouse_x, int mouse_y) {
             else if (item == 2) open_app(APP_TERMINAL);
             else if (item == 3) open_app(APP_WEB);
             else if (item == 4) open_app(APP_SETTINGS);
+            else if (item == 5) open_app(APP_MESSAGES);
             return;
         }
     }
@@ -756,16 +814,40 @@ static void keyboard_poll(void) {
     u8 status = inb(0x64);
     if (!(status & 1) || (status & 0x20)) return;
     u8 code = inb(0x60);
-    if (active_app != APP_TERMINAL || (code & 0x80)) return;
-    if (code == 0x1C) {
-        terminal_execute();
-    } else if (code == 0x0E) {
-        if (terminal_line_length) terminal_line[--terminal_line_length] = 0;
+    if ((code & 0x80) || (active_app != APP_TERMINAL && active_app != APP_MESSAGES)) return;
+    if (active_app == APP_TERMINAL) {
+        if (code == 0x1C) {
+            terminal_execute();
+        } else if (code == 0x0E) {
+            if (terminal_line_length) terminal_line[--terminal_line_length] = 0;
+        } else {
+            char ch = keyboard_character(code);
+            if (ch && terminal_line_length < sizeof(terminal_line) - 1) {
+                terminal_line[terminal_line_length++] = ch;
+                terminal_line[terminal_line_length] = 0;
+            }
+        }
     } else {
-        char ch = keyboard_character(code);
-        if (ch && terminal_line_length < sizeof(terminal_line) - 1) {
-            terminal_line[terminal_line_length++] = ch;
-            terminal_line[terminal_line_length] = 0;
+        if (code == 0x1C) {
+            message_draft[message_draft_length] = 0;
+            if (message_draft_length) {
+                u32 n = 0;
+                while (message_draft[n] && n < sizeof(last_message) - 1) {
+                    last_message[n] = message_draft[n];
+                    n++;
+                }
+                last_message[n] = 0;
+            }
+            message_draft_length = 0;
+            message_draft[0] = 0;
+        } else if (code == 0x0E) {
+            if (message_draft_length) message_draft[--message_draft_length] = 0;
+        } else {
+            char ch = keyboard_character(code);
+            if (ch && message_draft_length < sizeof(message_draft) - 1) {
+                message_draft[message_draft_length++] = ch;
+                message_draft[message_draft_length] = 0;
+            }
         }
     }
     cursor_restore();
