@@ -7,19 +7,21 @@ BlueApple is an experimental PC operating system with its own visual direction: 
 The root `load.ol` file is included in the boot ISO and passed to the kernel as a Multiboot module.
 
 ```ini
+# LO = Local Mode (default for VS Code)
 # M1 = USB Live Mode
 # M2 = Machine Mode
-mode = M1
+mode = LO
 
 # Allowed values: 50, 100, 150
 fps = 100
 ```
 
+- **LO / Local:** default developer profile. Build and run locally from VS Code using QEMU; it does not install BlueApple.
 - **M1 / USB Live:** temporary live session intended for booting from USB. The current kernel does not write to storage.
 - **M2 / Machine:** dedicated-machine boot profile. This currently changes the boot profile and screen, but does not install BlueApple or configure a disk.
 - **FPS:** the selected value is read and displayed by the kernel. A real graphics frame limiter will use this setting after framebuffer graphics are implemented.
 
-If the config is missing or invalid, the kernel defaults to M1 and 100 FPS.
+If the config is missing or invalid, the kernel defaults to LO and 100 FPS.
 
 ## Current milestone
 
@@ -64,7 +66,7 @@ The ISO is created at `build/blueapple.iso`.
 
 ## Roadmap
 
-1. Configuration-aware M1/M2 boot.
+1. Configuration-aware LO/M1/M2 boot.
 2. Framebuffer graphics and keyboard input.
 3. Orbit desktop shell with its own navigation and window behavior.
 4. File manager, settings, and original BlueApple apps.
