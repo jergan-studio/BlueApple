@@ -4,7 +4,7 @@ BlueApple is an experimental PC operating system with its own visual direction: 
 
 ## Boot modes
 
-The root `load.ol` file is included in the boot ISO and passed to the kernel as a Multiboot module.
+The root `load.ol` file is included in the boot ISO and passed to the kernel as a Multiboot module. It also configures the local profile name shown in Orbit UI.
 
 ```ini
 # LO = Local Mode (default for VS Code)
@@ -14,6 +14,7 @@ mode = LO
 
 # Allowed values: 50, 100, 150
 fps = 100
+username = GUEST
 ```
 
 - **LO / Local:** default developer profile. Build and run locally from VS Code using QEMU; it does not install BlueApple.
@@ -35,6 +36,9 @@ The built-in app prototypes are:
 - **Orbit Web:** displays an offline start page. Networking and web rendering are not implemented.
 - **Orbit Paint:** lets you click inside its canvas to place simple marks. This is an early drawing prototype, not a full paint program.
 - **About:** displays BlueApple/Orbit information.
+- **Wi-Fi:** adds a status icon and a wireless status panel. A real Wi-Fi chipset driver, scanning, authentication, and internet networking are **not implemented yet**.
+- **Users:** displays the local profile name configured in `load.ol`. This is not a multi-user login or account system.
+- **Messages:** lets you type and send a short local demo message with the keyboard. Messages are temporary and are not sent over a network.
 
 App windows can be opened from the dock, desktop shortcuts, or Orbit Menu, dragged by their title bars, and closed with the X control. The PS/2 mouse driver is polled by the kernel; its relative movement packets are accumulated into guest-screen coordinates. These are **BlueApple/QEMU guest coordinates**, not the Linux host desktop's absolute pointer coordinates.
 
@@ -83,7 +87,9 @@ The ISO is created at `build/blueapple.iso`.
 2. Reliable mouse and keyboard input, expanding BlueTerm's command support.
 3. Window focus, resizing, and more complete Orbit desktop behavior.
 4. Real filesystem access for BlueFiles and command execution in BlueTerm.
-5. Drawing tools, networking, and more complete built-in apps.
+5. Real Wi-Fi chipset drivers, network scanning, and connectivity.
+6. Persistent user accounts and network-backed messaging.
+7. Drawing tools and more complete built-in apps.
 6. USB hardware testing and persistent live-session options.
 
 **Warning:** This is experimental software. Test in QEMU first. Do not use it as a daily operating system yet, and do not write experimental images to a USB containing files you need.
