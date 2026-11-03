@@ -513,6 +513,13 @@ static int mouse_wait_output(void) {
     }
     return 0;
 }
+static int mouse_wait_aux_output(void) {
+    for (u32 i = 0; i < 100000; i++) {
+        u8 status = inb(0x64);
+        if ((status & 0x21) == 0x21) return 1;
+    }
+    return 0;
+}
 static int mouse_write(u8 value) {
     if (!mouse_wait_input()) return 0;
     outb(0x64, 0xD4);
@@ -521,7 +528,7 @@ static int mouse_write(u8 value) {
     return 1;
 }
 static int mouse_read_ack(void) {
-    if (!mouse_wait_output()) return 0;
+    if (!mouse_wait_aux_output()) return 0;
     return inb(0x60) == 0xFA;
 }
 static int mouse_initialize(void) {
@@ -546,9 +553,9 @@ static int mouse_initialize(void) {
 
     /* Reset, consume the reset self-test and device ID, then enable reporting. */
     if (!mouse_write(0xFF) || !mouse_read_ack()) return 0;
-    if (!mouse_wait_output()) return 0;
+    if (!mouse_wait_aux_output()) return 0;
     (void)inb(0x60);               /* 0xAA self-test result */
-    if (!mouse_wait_output()) return 0;
+    if (!mouse_wait_aux_output()) return 0;
     (void)inb(0x60);               /* Mouse device ID */
     if (!mouse_write(0xF6) || !mouse_read_ack()) return 0; /* Defaults */
     if (!mouse_write(0xF4) || !mouse_read_ack()) return 0; /* Data reporting */
