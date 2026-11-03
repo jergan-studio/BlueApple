@@ -282,6 +282,141 @@ static void draw_orbit_desktop(void) {
 }
 
 
+/* Simple interactive app/window state for the first Orbit desktop prototype. */
+enum {
+    APP_NONE = 0,
+    APP_FILES = 1,
+    APP_SETTINGS = 2,
+    APP_TERMINAL = 3,
+    APP_WEB = 4
+};
+static int active_app = APP_NONE;
+static int launcher_open = 0;
+
+static void open_app(int app) {
+    active_app = app;
+    launcher_open = 0;
+}
+
+static void draw_active_window(void) {
+    if (active_app == APP_NONE) return;
+
+    u32 width = fb.width > 620 ? 500 : fb.width - 40;
+    u32 height = fb.height > 390 ? 300 : fb.height - 100;
+    if (width < 220 || height < 130) return;
+    u32 x = (fb.width - width) / 2;
+    u32 y = (fb.height - height) / 2;
+    u32 panel = rgb(20, 31, 55);
+    u32 title = rgb(35, 57, 91);
+
+    fill_rect(x, y, width, height, panel);
+    fill_rect(x, y, width, 38, title);
+    fill_rect(x + width - 34, y + 7, 24, 24, rgb(190, 65, 78));
+    draw_string("X", x + width - 27, y + 15, 2, rgb(255, 255, 255));
+
+    if (active_app == APP_FILES) {
+        draw_string("BLUEFILES", x + 18, y + 14, 2, rgb(240, 246, 255));
+        draw_string("FILE MANAGER", x + 24, y + 68, 2, rgb(125, 195, 255));
+        draw_string("YOUR FILES WILL APPEAR HERE", x + 24, y + 112, 1, rgb(225, 235, 250));
+        draw_string("STORAGE SUPPORT IS COMING", x + 24, y + 142, 1, rgb(175, 195, 225));
+    } else if (active_app == APP_SETTINGS) {
+        draw_string("SETTINGS", x + 18, y + 14, 2, rgb(240, 246, 255));
+        draw_string("CONTROL CENTER", x + 24, y + 68, 2, rgb(125, 195, 255));
+        draw_string("DISPLAY", x + 24, y + 112, 1, rgb(225, 235, 250));
+        draw_string("INPUT", x + 24, y + 142, 1, rgb(225, 235, 250));
+        draw_string("SYSTEM PROFILE", x + 24, y + 172, 1, rgb(225, 235, 250));
+    } else if (active_app == APP_TERMINAL) {
+        draw_string("BLUETERM", x + 18, y + 14, 2, rgb(240, 246, 255));
+        draw_string("TERMINAL READY", x + 24, y + 68, 2, rgb(105, 225, 175));
+        draw_string("COMMAND SUPPORT IS COMING", x + 24, y + 112, 1, rgb(225, 235, 250));
+    } else if (active_app == APP_WEB) {
+        draw_string("ORBIT WEB", x + 18, y + 14, 2, rgb(240, 246, 255));
+        draw_string("BROWSER", x + 24, y + 68, 2, rgb(125, 195, 255));
+        draw_string("NETWORK SUPPORT IS COMING", x + 24, y + 112, 1, rgb(225, 235, 250));
+    }
+}
+
+static void draw_launcher(void) {
+    if (!launcher_open) return;
+    u32 width = fb.width > 360 ? 300 : fb.width - 24;
+    u32 height = 238;
+    u32 x = 18;
+    u32 y = fb.height > height + 70 ? fb.height - height - 70 : 48;
+    fill_rect(x, y, width, height, rgb(18, 29, 53));
+    fill_rect(x, y, width, 36, rgb(38, 62, 98));
+    draw_string("ORBIT MENU", x + 14, y + 13, 2, rgb(240, 246, 255));
+
+    fill_rect(x + 12, y + 50, width - 24, 42, rgb(34, 66, 105));
+    fill_rect(x + 12, y + 102, width - 24, 42, rgb(34, 66, 105));
+    fill_rect(x + 12, y + 154, width - 24, 42, rgb(34, 66, 105));
+    draw_string("FILES", x + 26, y + 66, 2, rgb(240, 246, 255));
+    draw_string("TERMINAL", x + 26, y + 118, 2, rgb(240, 246, 255));
+    draw_string("SETTINGS", x + 26, y + 170, 2, rgb(240, 246, 255));
+}
+
+static void render_desktop(void) {
+    draw_orbit_desktop();
+    draw_active_window();
+    draw_launcher();
+}
+
+static void desktop_click(int mouse_x, int mouse_y) {
+    u32 dock_width = fb.width < 620 ? fb.width - 24 : 560;
+    u32 dock_x = (fb.width - dock_width) / 2;
+    u32 dock_y = fb.height > 100 ? fb.height - 76 : 0;
+
+    /* Dock clicks are handled first so the dock remains a navigation surface. */
+    if ((u32)mouse_y >= dock_y && (u32)mouse_y < dock_y + 54) {
+        int item = (mouse_x - (int)dock_x - 8) / 66;
+        if (mouse_x >= (int)dock_x + 8 && item >= 0 && item < 5) {
+            if (item == 0) {
+                active_app = APP_NONE;
+                launcher_open = !launcher_open;
+            } else if (item == 1) open_app(APP_FILES);
+            else if (item == 2) open_app(APP_TERMINAL);
+            else if (item == 3) open_app(APP_WEB);
+            else if (item == 4) open_app(APP_SETTINGS);
+            return;
+        }
+    }
+
+    if (launcher_open) {
+        u32 menu_width = fb.width > 360 ? 300 : fb.width - 24;
+        u32 menu_x = 18;
+        u32 menu_y = fb.height > 308 ? fb.height - 308 : 48;
+        if (mouse_x >= (int)menu_x + 12 && mouse_x < (int)(menu_x + menu_width - 12)) {
+            if (mouse_y >= (int)menu_y + 50 && mouse_y < (int)menu_y + 92)
+                open_app(APP_FILES);
+            else if (mouse_y >= (int)menu_y + 102 && mouse_y < (int)menu_y + 144)
+                open_app(APP_TERMINAL);
+            else if (mouse_y >= (int)menu_y + 154 && mouse_y < (int)menu_y + 196)
+                open_app(APP_SETTINGS);
+            else launcher_open = 0;
+        } else {
+            launcher_open = 0;
+        }
+        return;
+    }
+
+    if (active_app != APP_NONE) {
+        u32 width = fb.width > 620 ? 500 : fb.width - 40;
+        u32 height = fb.height > 390 ? 300 : fb.height - 100;
+        u32 x = (fb.width - width) / 2;
+        u32 y = (fb.height - height) / 2;
+        if (mouse_x >= (int)(x + width - 34) && mouse_x < (int)(x + width - 10) &&
+            mouse_y >= (int)(y + 7) && mouse_y < (int)(y + 31))
+            active_app = APP_NONE;
+        return;
+    }
+
+    /* Desktop shortcuts. */
+    if (mouse_x >= 30 && mouse_x <= 110 && mouse_y >= 76 && mouse_y <= 146)
+        open_app(APP_FILES);
+    else if (mouse_x >= 30 && mouse_x <= 110 && mouse_y >= 146 && mouse_y <= 216)
+        open_app(APP_SETTINGS);
+}
+
+
 /* Polled PS/2 mouse driver: no IRQ/IDT dependency in this early kernel. */
 static inline void outb(u16 port, u8 value) {
     __asm__ volatile ("outb %0, %1" : : "a"(value), "Nd"(port));
@@ -376,7 +511,14 @@ static void mouse_handle_packet(const u8 packet[3]) {
     if (cursor_y < 0) cursor_y = 0;
     if ((u32)cursor_x >= fb.width) cursor_x = (int)fb.width - 1;
     if ((u32)cursor_y >= fb.height) cursor_y = (int)fb.height - 1;
-    mouse_buttons = packet[0] & 0x07;
+
+    u8 new_buttons = packet[0] & 0x07;
+    u8 pressed = new_buttons & (u8)~mouse_buttons;
+    mouse_buttons = new_buttons;
+    if (pressed & 0x01) {
+        desktop_click(cursor_x, cursor_y);
+        render_desktop();
+    }
     cursor_draw();
 }
 static void mouse_poll(void) {
@@ -410,7 +552,7 @@ static void draw_text_console(void) {
 void kernel_main(u32 magic, const multiboot_info_t* info) {
     load_config(magic, info);
     if (setup_framebuffer(info)) {
-        draw_orbit_desktop();
+        render_desktop();
         cursor_draw();
         mouse_initialize();
         for (;;) {
