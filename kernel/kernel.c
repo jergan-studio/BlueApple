@@ -251,7 +251,7 @@ static void draw_orbit_desktop(void) {
     fill_rect(18, 12, 18, 18, rgb(65, 155, 255));
     fill_rect(23, 16, 8, 10, rgb(235, 245, 255));
     draw_string("BLUEAPPLE", 48, 16, 2, rgb(225, 238, 255));
-    draw_string("ORBIT UI", fb.width > 170 ? fb.width - 92 : 20, 16, 1, rgb(145, 180, 230));
+    draw_string("DESKTOP", fb.width > 170 ? fb.width - 92 : 20, 16, 1, rgb(145, 180, 230));
 
     /* Desktop shortcut tiles */
     fill_rect(42, 82, 48, 48, rgb(30, 75, 135));
@@ -377,7 +377,6 @@ static void draw_active_window(void) {
         draw_string(boot_mode == 'L' ? "LOCAL" : (boot_mode == '1' ? "USB LIVE" : "MACHINE"), x + 110, y + 232, 1, rgb(225, 235, 250));
     } else if (active_app == APP_TERMINAL) {
         draw_string("BLUEAPPLE TERMINAL", x + 24, y + 108, 1, rgb(105, 225, 175));
-        draw_string("KERNEL SESSION ACTIVE", x + 24, y + 138, 1, rgb(225, 235, 250));
         draw_string("TYPE HELP AND PRESS ENTER", x + 24, y + 138, 1, rgb(175, 195, 225));
         draw_string(">", x + 24, y + 178, 1, rgb(105, 225, 175));
         draw_string(terminal_line, x + 38, y + 178, 1, rgb(240, 246, 255));
@@ -663,7 +662,7 @@ static void mouse_poll(void) {
     u8 status = inb(0x64);
     if (!(status & 1)) return;
     u8 data = inb(0x60);
-    /* Discard keyboard bytes for now so they cannot block mouse packets. */
+    /* keyboard_poll handles non-aux bytes before this mouse poll runs. */
     if (!(status & 0x20)) return;
     if (packet_index == 0 && !(data & 0x08)) return;
     packet[packet_index++] = data;
