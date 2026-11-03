@@ -565,9 +565,8 @@ static void mouse_handle_packet(const u8 packet[3]) {
     if (pressed & 0x01) {
         desktop_click(cursor_x, cursor_y);
         render_desktop();
-    } else {
-        draw_mouse_coordinates();
     }
+    draw_mouse_coordinates();
     cursor_draw();
 }
 static void mouse_poll(void) {
