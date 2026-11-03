@@ -667,10 +667,9 @@ static void mouse_poll(void) {
     static u8 packet[3];
     static u8 packet_index = 0;
     u8 status = inb(0x64);
-    if (!(status & 1)) return;
+    /* Leave keyboard bytes in the controller for keyboard_poll next cycle. */
+    if (!(status & 1) || !(status & 0x20)) return;
     u8 data = inb(0x60);
-    /* keyboard_poll handles non-aux bytes before this mouse poll runs. */
-    if (!(status & 0x20)) return;
     if (packet_index == 0 && !(data & 0x08)) return;
     packet[packet_index++] = data;
     if (packet_index == 3) {
