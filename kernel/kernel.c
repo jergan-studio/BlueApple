@@ -477,6 +477,11 @@ static void render_desktop(void) {
 }
 
 static void desktop_click(int mouse_x, int mouse_y) {
+    /* Clicking the Wi-Fi glyph in the Orbit Bar opens wireless status. */
+    if (mouse_y >= 6 && mouse_y < 40 && mouse_x >= 326 && mouse_x < 400) {
+        open_app(APP_WIFI);
+        return;
+    }
     u32 dock_width = fb.width < 620 ? fb.width - 24 : 560;
     u32 dock_x = (fb.width - dock_width) / 2;
     u32 dock_y = fb.height > 100 ? fb.height - 76 : 0;
