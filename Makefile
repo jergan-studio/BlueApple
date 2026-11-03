@@ -3,7 +3,7 @@ ISO_DIR := $(BUILD_DIR)/iso
 KERNEL := $(BUILD_DIR)/blueapple.elf
 ISO := $(BUILD_DIR)/blueapple.iso
 
-.PHONY: all clean run iso
+.PHONY: all clean run local iso
 
 all: iso
 
@@ -27,6 +27,10 @@ iso: $(KERNEL)
 	grub-mkrescue -o $(ISO) $(ISO_DIR)
 
 run: iso
+	qemu-system-i386 -cdrom $(ISO)
+
+# Default developer workflow: build and run BlueApple in local LO mode.
+local: iso
 	qemu-system-i386 -cdrom $(ISO)
 
 clean:
