@@ -288,8 +288,34 @@ enum {
     APP_FILES = 1,
     APP_SETTINGS = 2,
     APP_TERMINAL = 3,
-    APP_WEB = 4
+    APP_WEB = 4,
+    APP_PAINT = 5,
+    APP_ABOUT = 6
 };
+
+typedef struct {
+    int id;
+    const char* name;
+    const char* subtitle;
+    u32 accent;
+} orbit_app_t;
+
+/* Central app registry: add future built-in apps here. */
+static const orbit_app_t orbit_apps[] = {
+    { APP_FILES, "BLUEFILES", "FILE MANAGER", 0x65B7FF },
+    { APP_TERMINAL, "BLUETERM", "TERMINAL", 0x69E1AF },
+    { APP_SETTINGS, "SETTINGS", "CONTROL CENTER", 0xB28AF5 },
+    { APP_WEB, "ORBIT WEB", "BROWSER", 0x8CCBFF },
+    { APP_PAINT, "ORBIT PAINT", "DRAWING APP", 0xF0B85A },
+    { APP_ABOUT, "ABOUT", "BLUEAPPLE SYSTEM", 0x75D6C0 }
+};
+#define ORBIT_APP_COUNT (sizeof(orbit_apps) / sizeof(orbit_apps[0]))
+
+static const orbit_app_t* find_app(int id) {
+    for (u32 i = 0; i < ORBIT_APP_COUNT; i++)
+        if (orbit_apps[i].id == id) return &orbit_apps[i];
+    return 0;
+}
 static int active_app = APP_NONE;
 static int launcher_open = 0;
 
@@ -300,60 +326,60 @@ static void open_app(int app) {
 
 static void draw_active_window(void) {
     if (active_app == APP_NONE) return;
+    const orbit_app_t* app = find_app(active_app);
+    if (!app) return;
 
     u32 width = fb.width > 620 ? 500 : fb.width - 40;
     u32 height = fb.height > 390 ? 300 : fb.height - 100;
     if (width < 220 || height < 130) return;
     u32 x = (fb.width - width) / 2;
     u32 y = (fb.height - height) / 2;
-    u32 panel = rgb(20, 31, 55);
-    u32 title = rgb(35, 57, 91);
 
-    fill_rect(x, y, width, height, panel);
-    fill_rect(x, y, width, 38, title);
+    fill_rect(x, y, width, height, rgb(20, 31, 55));
+    fill_rect(x, y, width, 38, rgb(35, 57, 91));
     fill_rect(x + width - 34, y + 7, 24, 24, rgb(190, 65, 78));
     draw_string("X", x + width - 27, y + 15, 2, rgb(255, 255, 255));
+    draw_string(app->name, x + 18, y + 14, 2, rgb(240, 246, 255));
+    draw_string(app->subtitle, x + 24, y + 68, 2, app->accent);
 
     if (active_app == APP_FILES) {
-        draw_string("BLUEFILES", x + 18, y + 14, 2, rgb(240, 246, 255));
-        draw_string("FILE MANAGER", x + 24, y + 68, 2, rgb(125, 195, 255));
         draw_string("YOUR FILES WILL APPEAR HERE", x + 24, y + 112, 1, rgb(225, 235, 250));
         draw_string("STORAGE SUPPORT IS COMING", x + 24, y + 142, 1, rgb(175, 195, 225));
     } else if (active_app == APP_SETTINGS) {
-        draw_string("SETTINGS", x + 18, y + 14, 2, rgb(240, 246, 255));
-        draw_string("CONTROL CENTER", x + 24, y + 68, 2, rgb(125, 195, 255));
         draw_string("DISPLAY", x + 24, y + 112, 1, rgb(225, 235, 250));
         draw_string("INPUT", x + 24, y + 142, 1, rgb(225, 235, 250));
         draw_string("SYSTEM PROFILE", x + 24, y + 172, 1, rgb(225, 235, 250));
     } else if (active_app == APP_TERMINAL) {
-        draw_string("BLUETERM", x + 18, y + 14, 2, rgb(240, 246, 255));
-        draw_string("TERMINAL READY", x + 24, y + 68, 2, rgb(105, 225, 175));
-        draw_string("COMMAND SUPPORT IS COMING", x + 24, y + 112, 1, rgb(225, 235, 250));
+        draw_string("TERMINAL READY", x + 24, y + 112, 1, rgb(105, 225, 175));
+        draw_string("COMMAND SUPPORT IS COMING", x + 24, y + 142, 1, rgb(225, 235, 250));
     } else if (active_app == APP_WEB) {
-        draw_string("ORBIT WEB", x + 18, y + 14, 2, rgb(240, 246, 255));
-        draw_string("BROWSER", x + 24, y + 68, 2, rgb(125, 195, 255));
         draw_string("NETWORK SUPPORT IS COMING", x + 24, y + 112, 1, rgb(225, 235, 250));
+    } else if (active_app == APP_PAINT) {
+        fill_rect(x + 24, y + 108, width - 48, height - 132, rgb(235, 239, 247));
+        draw_string("CANVAS READY", x + 34, y + 120, 1, rgb(35, 57, 91));
+    } else if (active_app == APP_ABOUT) {
+        draw_string("A SMALL OS WITH A BIG FUTURE", x + 24, y + 112, 1, rgb(225, 235, 250));
+        draw_string("ORBIT UI", x + 24, y + 142, 1, rgb(225, 235, 250));
+        draw_string("BLUEAPPLE V1 IS IN DEVELOPMENT", x + 24, y + 172, 1, rgb(225, 235, 250));
     }
 }
-
 static void draw_launcher(void) {
     if (!launcher_open) return;
     u32 width = fb.width > 360 ? 300 : fb.width - 24;
-    u32 height = 238;
+    u32 row_height = 38;
+    u32 height = 42 + (u32)ORBIT_APP_COUNT * 44;
     u32 x = 18;
     u32 y = fb.height > height + 70 ? fb.height - height - 70 : 48;
     fill_rect(x, y, width, height, rgb(18, 29, 53));
     fill_rect(x, y, width, 36, rgb(38, 62, 98));
     draw_string("ORBIT MENU", x + 14, y + 13, 2, rgb(240, 246, 255));
 
-    fill_rect(x + 12, y + 50, width - 24, 42, rgb(34, 66, 105));
-    fill_rect(x + 12, y + 102, width - 24, 42, rgb(34, 66, 105));
-    fill_rect(x + 12, y + 154, width - 24, 42, rgb(34, 66, 105));
-    draw_string("FILES", x + 26, y + 66, 2, rgb(240, 246, 255));
-    draw_string("TERMINAL", x + 26, y + 118, 2, rgb(240, 246, 255));
-    draw_string("SETTINGS", x + 26, y + 170, 2, rgb(240, 246, 255));
+    for (u32 i = 0; i < ORBIT_APP_COUNT; i++) {
+        u32 row_y = y + 44 + i * 44;
+        fill_rect(x + 10, row_y, width - 20, row_height, rgb(34, 66, 105));
+        draw_string(orbit_apps[i].name, x + 22, row_y + 15, 1, rgb(240, 246, 255));
+    }
 }
-
 static void render_desktop(void) {
     draw_orbit_desktop();
     draw_active_window();
@@ -365,7 +391,6 @@ static void desktop_click(int mouse_x, int mouse_y) {
     u32 dock_x = (fb.width - dock_width) / 2;
     u32 dock_y = fb.height > 100 ? fb.height - 76 : 0;
 
-    /* Dock clicks are handled first so the dock remains a navigation surface. */
     if ((u32)mouse_y >= dock_y && (u32)mouse_y < dock_y + 54) {
         int item = (mouse_x - (int)dock_x - 8) / 66;
         if (mouse_x >= (int)dock_x + 8 && item >= 0 && item < 5) {
@@ -383,18 +408,18 @@ static void desktop_click(int mouse_x, int mouse_y) {
     if (launcher_open) {
         u32 menu_width = fb.width > 360 ? 300 : fb.width - 24;
         u32 menu_x = 18;
-        u32 menu_y = fb.height > 308 ? fb.height - 308 : 48;
-        if (mouse_x >= (int)menu_x + 12 && mouse_x < (int)(menu_x + menu_width - 12)) {
-            if (mouse_y >= (int)menu_y + 50 && mouse_y < (int)menu_y + 92)
-                open_app(APP_FILES);
-            else if (mouse_y >= (int)menu_y + 102 && mouse_y < (int)menu_y + 144)
-                open_app(APP_TERMINAL);
-            else if (mouse_y >= (int)menu_y + 154 && mouse_y < (int)menu_y + 196)
-                open_app(APP_SETTINGS);
-            else launcher_open = 0;
-        } else {
-            launcher_open = 0;
+        u32 menu_height = 42 + (u32)ORBIT_APP_COUNT * 44;
+        u32 menu_y = fb.height > menu_height + 70 ? fb.height - menu_height - 70 : 48;
+        if (mouse_x >= (int)menu_x + 10 && mouse_x < (int)(menu_x + menu_width - 10)) {
+            for (u32 i = 0; i < ORBIT_APP_COUNT; i++) {
+                u32 row_y = menu_y + 44 + i * 44;
+                if (mouse_y >= (int)row_y && mouse_y < (int)(row_y + 38)) {
+                    open_app(orbit_apps[i].id);
+                    return;
+                }
+            }
         }
+        launcher_open = 0;
         return;
     }
 
@@ -409,13 +434,11 @@ static void desktop_click(int mouse_x, int mouse_y) {
         return;
     }
 
-    /* Desktop shortcuts. */
     if (mouse_x >= 30 && mouse_x <= 110 && mouse_y >= 76 && mouse_y <= 146)
         open_app(APP_FILES);
     else if (mouse_x >= 30 && mouse_x <= 110 && mouse_y >= 146 && mouse_y <= 216)
         open_app(APP_SETTINGS);
 }
-
 
 /* Polled PS/2 mouse driver: no IRQ/IDT dependency in this early kernel. */
 static inline void outb(u16 port, u8 value) {
@@ -468,6 +491,30 @@ static int cursor_x = 80;
 static int cursor_y = 80;
 static u8 mouse_buttons = 0;
 
+static void draw_unsigned(u32 value, u32 x, u32 y, u32 color) {
+    char digits[10];
+    u32 count = 0;
+    if (value == 0) digits[count++] = '0';
+    while (value && count < sizeof(digits)) {
+        digits[count++] = (char)('0' + (value % 10));
+        value /= 10;
+    }
+    while (count) {
+        draw_char(digits[--count], x, y, 1, color);
+        x += 7;
+    }
+}
+
+/* Guest pointer coordinates are estimated by accumulating PS/2 relative deltas. */
+static void draw_mouse_coordinates(void) {
+    u32 left = fb.width > 240 ? fb.width - 220 : 4;
+    fill_rect(left, 5, fb.width > 240 ? 216 : fb.width - 8, 30, rgb(10, 17, 36));
+    draw_string("X", left + 4, 15, 1, rgb(145, 180, 230));
+    draw_unsigned((u32)cursor_x, left + 18, 15, rgb(235, 245, 255));
+    draw_string("Y", left + 92, 15, 1, rgb(145, 180, 230));
+    draw_unsigned((u32)cursor_y, left + 106, 15, rgb(235, 245, 255));
+}
+
 static const u16 cursor_shape[CURSOR_H] = {
     0x001, 0x003, 0x007, 0x00F, 0x01F, 0x03F, 0x07F, 0x0FF,
     0x1FF, 0x03F, 0x033, 0x063, 0x0C3, 0x183, 0x103, 0x000
@@ -518,6 +565,8 @@ static void mouse_handle_packet(const u8 packet[3]) {
     if (pressed & 0x01) {
         desktop_click(cursor_x, cursor_y);
         render_desktop();
+    } else {
+        draw_mouse_coordinates();
     }
     cursor_draw();
 }
@@ -553,6 +602,7 @@ void kernel_main(u32 magic, const multiboot_info_t* info) {
     load_config(magic, info);
     if (setup_framebuffer(info)) {
         render_desktop();
+        draw_mouse_coordinates();
         cursor_draw();
         mouse_initialize();
         for (;;) {
