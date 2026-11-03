@@ -1,4 +1,4 @@
-; BlueApple: Multiboot 1 entry point
+; BlueApple Multiboot 1 entry point
 BITS 32
 
 section .multiboot
@@ -14,7 +14,10 @@ extern kernel_main
 _start:
     cli
     mov esp, stack_top
+    push ebx                ; Multiboot information pointer
+    push eax                ; Multiboot boot magic
     call kernel_main
+    add esp, 8
 
 .hang:
     hlt
