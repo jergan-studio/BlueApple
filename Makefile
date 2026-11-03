@@ -23,6 +23,7 @@ iso: $(KERNEL)
 	mkdir -p $(ISO_DIR)/boot/grub
 	cp $(KERNEL) $(ISO_DIR)/boot/blueapple.elf
 	cp boot/grub/grub.cfg $(ISO_DIR)/boot/grub/grub.cfg
+	cp load.ol $(ISO_DIR)/boot/load.ol
 	grub-mkrescue -o $(ISO) $(ISO_DIR)
 
 run: iso
