@@ -30,7 +30,7 @@ BlueApple now has an early framebuffer-based **Orbit desktop prototype**. It dra
 The built-in app prototypes are:
 
 - **BlueFiles:** displays a small virtual system-file listing. Real disk and filesystem drivers are not implemented.
-- **BlueTerm:** displays terminal session status. Keyboard input and command execution are not implemented.
+- **BlueTerm:** accepts basic keyboard input and supports `HELP`, `ABOUT`, `MODE`, `FPS`, and `CLEAR`. It is a small built-in command demo, not a Linux/host shell.
 - **Settings:** displays the active boot profile and configured FPS. Interactive settings changes are not implemented.
 - **Orbit Web:** displays an offline start page. Networking and web rendering are not implemented.
 - **Orbit Paint:** lets you click inside its canvas to place simple marks. This is an early drawing prototype, not a full paint program.
@@ -80,7 +80,7 @@ The ISO is created at `build/blueapple.iso`.
 ## Roadmap
 
 1. Configuration-aware LO/M1/M2 boot.
-2. Reliable mouse and keyboard input, including keyboard-driven terminal use.
+2. Reliable mouse and keyboard input, expanding BlueTerm's command support.
 3. Window focus, resizing, and more complete Orbit desktop behavior.
 4. Real filesystem access for BlueFiles and command execution in BlueTerm.
 5. Drawing tools, networking, and more complete built-in apps.
