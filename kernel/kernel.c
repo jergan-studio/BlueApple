@@ -281,6 +281,118 @@ static void draw_orbit_desktop(void) {
     draw_string("SET", dock_x + 280, dock_y + 43, 1, rgb(205, 220, 245));
 }
 
+
+/* Polled PS/2 mouse driver: no IRQ/IDT dependency in this early kernel. */
+static inline void outb(u16 port, u8 value) {
+    __asm__ volatile ("outb %0, %1" : : "a"(value), "Nd"(port));
+}
+static inline u8 inb(u16 port) {
+    u8 value;
+    __asm__ volatile ("inb %1, %0" : "=a"(value) : "Nd"(port));
+    return value;
+}
+static void io_wait(void) {
+    __asm__ volatile ("outb %%al, $0x80" : : "a"(0));
+}
+static int mouse_wait_input(void) {
+    for (u32 i = 0; i < 100000; i++) {
+        if (!(inb(0x64) & 2)) return 1;
+    }
+    return 0;
+}
+static int mouse_wait_output(void) {
+    for (u32 i = 0; i < 100000; i++) {
+        if (inb(0x64) & 1) return 1;
+    }
+    return 0;
+}
+static int mouse_write(u8 value) {
+    if (!mouse_wait_input()) return 0;
+    outb(0x64, 0xD4);
+    if (!mouse_wait_input()) return 0;
+    outb(0x60, value);
+    return 1;
+}
+static int mouse_read_ack(void) {
+    if (!mouse_wait_output()) return 0;
+    return inb(0x60) == 0xFA;
+}
+static int mouse_initialize(void) {
+    if (!mouse_wait_input()) return 0;
+    outb(0x64, 0xA8);       /* Enable auxiliary PS/2 device port. */
+    io_wait();
+    if (!mouse_write(0xF4)) return 0; /* Enable mouse data reporting. */
+    return mouse_read_ack();
+}
+
+#define CURSOR_W 12
+#define CURSOR_H 16
+static u32 cursor_saved[CURSOR_W * CURSOR_H];
+static int cursor_visible = 0;
+static int cursor_x = 80;
+static int cursor_y = 80;
+static u8 mouse_buttons = 0;
+
+static const u16 cursor_shape[CURSOR_H] = {
+    0x001, 0x003, 0x007, 0x00F, 0x01F, 0x03F, 0x07F, 0x0FF,
+    0x1FF, 0x03F, 0x033, 0x063, 0x0C3, 0x183, 0x103, 0x000
+};
+
+static void cursor_restore(void) {
+    if (!cursor_visible) return;
+    for (u32 y = 0; y < CURSOR_H; y++)
+        for (u32 x = 0; x < CURSOR_W; x++)
+            pixel((u32)cursor_x + x, (u32)cursor_y + y,
+                  cursor_saved[y * CURSOR_W + x]);
+    cursor_visible = 0;
+}
+static void cursor_draw(void) {
+    if (cursor_x < 0 || cursor_y < 0) return;
+    for (u32 y = 0; y < CURSOR_H; y++) {
+        for (u32 x = 0; x < CURSOR_W; x++) {
+            u32 px = (u32)cursor_x + x;
+            u32 py = (u32)cursor_y + y;
+            if (px >= fb.width || py >= fb.height) {
+                cursor_saved[y * CURSOR_W + x] = 0;
+                continue;
+            }
+            volatile u32* row = (volatile u32*)(fb.address + py * fb.pitch);
+            cursor_saved[y * CURSOR_W + x] = row[px];
+            if (cursor_shape[y] & (1u << x))
+                pixel(px, py, (x == 0 || y == 0) ? rgb(5, 10, 22) : rgb(245, 249, 255));
+        }
+    }
+    cursor_visible = 1;
+}
+static void mouse_handle_packet(const u8 packet[3]) {
+    /* Ignore overflow packets; PS/2 reports signed 8-bit movement. */
+    if (packet[0] & 0xC0) return;
+    int dx = (int)packet[1] - ((packet[0] & 0x10) ? 256 : 0);
+    int dy = (int)packet[2] - ((packet[0] & 0x20) ? 256 : 0);
+    cursor_restore();
+    cursor_x += dx;
+    cursor_y -= dy;
+    if (cursor_x < 0) cursor_x = 0;
+    if (cursor_y < 0) cursor_y = 0;
+    if ((u32)cursor_x >= fb.width) cursor_x = (int)fb.width - 1;
+    if ((u32)cursor_y >= fb.height) cursor_y = (int)fb.height - 1;
+    mouse_buttons = packet[0] & 0x07;
+    cursor_draw();
+}
+static void mouse_poll(void) {
+    static u8 packet[3];
+    static u8 packet_index = 0;
+    u8 status = inb(0x64);
+    if (!(status & 1) || !(status & 0x20)) return;
+    u8 data = inb(0x60);
+    if (packet_index == 0 && !(data & 0x08)) return; /* Packet sync bit. */
+    packet[packet_index++] = data;
+    if (packet_index == 3) {
+        packet_index = 0;
+        mouse_handle_packet(packet);
+    }
+}
+
 static void draw_text_console(void) {
     clear_screen();
     print_at(" .--------------------------------------------------------------. ", 2, 8, 0x09);
@@ -299,8 +411,14 @@ void kernel_main(u32 magic, const multiboot_info_t* info) {
     load_config(magic, info);
     if (setup_framebuffer(info)) {
         draw_orbit_desktop();
+        cursor_draw();
+        mouse_initialize();
+        for (;;) {
+            mouse_poll();
+            __asm__ volatile ("pause");
+        }
     } else {
         draw_text_console();
+        for (;;) __asm__ volatile ("hlt");
     }
-    for (;;) __asm__ volatile ("hlt");
 }
