@@ -531,7 +531,7 @@ static int mouse_initialize(void) {
     outb(0x64, 0x20);              /* Read controller command byte. */
     if (!mouse_wait_output()) return 0;
     u8 command = inb(0x60);
-    command = (u8)((command | 0x02) & (u8)~0x20);
+    command = (u8)(command & (u8)~0x22); /* Aux clock on, IRQ12 off: polling only. */
     if (!mouse_wait_input()) return 0;
     outb(0x64, 0x60);              /* Write controller command byte. */
     if (!mouse_wait_input()) return 0;
@@ -656,9 +656,10 @@ static void mouse_poll(void) {
     static u8 packet[3];
     static u8 packet_index = 0;
     u8 status = inb(0x64);
-    /* Only consume bytes tagged as auxiliary-device (mouse) data. */
-    if (!(status & 1) || !(status & 0x20)) return;
+    if (!(status & 1)) return;
     u8 data = inb(0x60);
+    /* Discard keyboard bytes for now so they cannot block mouse packets. */
+    if (!(status & 0x20)) return;
     if (packet_index == 0 && !(data & 0x08)) return;
     packet[packet_index++] = data;
     if (packet_index == 3) {
