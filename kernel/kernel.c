@@ -518,6 +518,8 @@ static void open_app(int app) {
     window_dragging = 0;
 }
 
+static void draw_unsigned(u32 value, u32 x, u32 y, u32 color);
+
 static void draw_active_window(void) {
     if (active_app == APP_NONE) return;
     const orbit_app_t* app = find_app(active_app);
@@ -571,13 +573,13 @@ static void draw_active_window(void) {
             u32 ip = net_ipv4_address();
             draw_string("E1000: CONNECTED // DHCP OK", x + 24, y + 142, 1, rgb(105, 225, 175));
             draw_string("IP ADDRESS:", x + 24, y + 172, 1, rgb(225, 235, 250));
-            draw_number((ip >> 24) & 255, x + 112, y + 172, 1, rgb(105, 225, 175));
+            draw_unsigned((ip >> 24) & 255, x + 112, y + 172, rgb(105, 225, 175));
             draw_string(".", x + 130, y + 172, 1, rgb(225, 235, 250));
-            draw_number((ip >> 16) & 255, x + 138, y + 172, 1, rgb(105, 225, 175));
+            draw_unsigned((ip >> 16) & 255, x + 138, y + 172, rgb(105, 225, 175));
             draw_string(".", x + 156, y + 172, 1, rgb(225, 235, 250));
-            draw_number((ip >> 8) & 255, x + 164, y + 172, 1, rgb(105, 225, 175));
+            draw_unsigned((ip >> 8) & 255, x + 164, y + 172, rgb(105, 225, 175));
             draw_string(".", x + 182, y + 172, 1, rgb(225, 235, 250));
-            draw_number(ip & 255, x + 190, y + 172, 1, rgb(105, 225, 175));
+            draw_unsigned(ip & 255, x + 190, y + 172, rgb(105, 225, 175));
         }
         draw_string("WEB BROWSING: DNS / TCP NOT READY", x + 24, y + 208, 1, rgb(175, 195, 225));
     } else if (active_app == APP_PAINT) {
