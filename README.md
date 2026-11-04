@@ -48,13 +48,15 @@ This remains an experimental kernel prototype, not a complete or daily-use opera
 
 ## QEMU networking milestone
 
-The Local/QEMU launch now attaches a user-mode QEMU network backend and an Intel E1000 (82540EM-compatible) virtual PCI adapter. The kernel includes a polling E1000 driver that:
+The Local/QEMU launch now attaches a user-mode QEMU network backend and an Intel E1000 (82540EM-compatible) virtual PCI adapter. The kernel includes a polling E1000 driver and an initial IPv4 protocol layer that:
 - scans PCI configuration space for vendor/device ID 8086:100E;
 - enables PCI memory-space access and bus mastering;
 - initializes receive/transmit descriptor rings and DMA buffers;
 - exposes Ethernet frame send/receive functions and polls received frames.
 
-This is the hardware-driver and Ethernet-frame-I/O foundation only. **BlueApple does not yet have DHCP, ARP, IPv4 routing, DNS, TCP, TLS, or an HTTP client**, so this commit does not yet provide usable internet access inside Orbit Web. The next networking milestones are DHCP address configuration, ARP/IPv4/ICMP, DNS, then TCP before browser traffic can work. QEMU user networking supplies NAT/DHCP services to a guest once those protocols are implemented; it does not automatically give this kernel a configured IP address.
+The new `kernel/net.c` layer sends DHCP discovery/request messages, parses the offered address, subnet, gateway and DNS options, answers ARP requests for the guest address, validates IPv4 headers, and replies to ICMP echo requests. The actual E1000 MAC is read from the device registers. Both `make run` and `make local` attach QEMU user-mode networking.
+
+This is the hardware-driver and Ethernet-frame-I/O foundation only. **This is not yet full internet access inside Orbit Web.** DHCP address configuration, basic ARP handling and IPv4/ICMP packet handling are now implemented as an initial network layer. DNS query resolution, general UDP sockets, TCP, TLS and HTTP are still missing. QEMU user networking supplies NAT/DHCP services, but the guest must implement the protocols itself.
 
 The E1000 driver is polling-only and assumes the current no-paging kernel identity-maps its DMA buffers. It targets QEMU's -device e1000 model, not physical Wi-Fi adapters.
 ## Safety design
