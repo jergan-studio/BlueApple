@@ -36,13 +36,72 @@ static void send_dhcp(u8 type){
  b[o++]=55;b[o++]=3;b[o++]=1;b[o++]=3;b[o++]=6;b[o++]=255;
  wr16(udp+4,(u16)(UDP_LEN+BOOTP_LEN+60));wr16(ip+2,(u16)(IP_LEN+UDP_LEN+BOOTP_LEN+60));wr16(ip+10,0);wr16(ip+10,checksum(ip,IP_LEN));n=ETH_LEN+IP_LEN+UDP_LEN+BOOTP_LEN+60;(void)e1000_send(p,(u16)n);
 }
+
+/* One-entry ARP cache and a single queued IPv4 datagram for early boot services. */
+static u32 arp_ip; static u8 arp_mac[6]; static int arp_valid;
+static u8 pending_ip[1400]; static u16 pending_len; static u32 pending_dst; static u8 pending_proto; static int pending_valid;
+static u16 dns_id=0xBA01; static int dns_waiting,dns_done; static u32 dns_answer;
+static u32 tcp_remote; static u16 tcp_port,tcp_local_port=49152,tcp_seq=0x10203040,tcp_ack; static int tcp_state;
+static u8 tcp_rx[512]; static u16 tcp_rx_len;
+static void send_arp_request(u32 target){
+ u8 p[42];eth_header(p,broadcast_mac,ETH_ARP);wr16(p+14,1);wr16(p+16,ETH_IP);p[18]=6;p[19]=4;wr16(p+20,1);
+ for(u32 i=0;i<6;i++){p[22+i]=mac[i];p[32+i]=0;}wr32(p+28,local_ip);wr32(p+38,target);(void)e1000_send(p,42);
+}
+static void send_ipv4_raw(u32 dst,u8 proto,const u8*payload,u16 plen,const u8*destmac){
+ u8 p[FRAME_MAX];eth_header(p,destmac,ETH_IP);u8*ip=p+14;ip[0]=0x45;ip[1]=0;wr16(ip+2,(u16)(20+plen));wr16(ip+4,ip_id++);wr16(ip+6,0x4000);ip[8]=64;ip[9]=proto;wr32(ip+12,local_ip);wr32(ip+16,dst);wr16(ip+10,0);wr16(ip+10,checksum(ip,20));
+ for(u32 i=0;i<plen;i++)p[34+i]=payload[i];(void)e1000_send(p,(u16)(34+plen));
+}
+static void send_ipv4(u32 dst,u8 proto,const u8*payload,u16 plen){
+ u32 next=(subnet_mask&&((dst&subnet_mask)==(local_ip&subnet_mask)))?dst:gateway_ip;
+ if(!next)return;
+ if(arp_valid&&arp_ip==next){send_ipv4_raw(dst,proto,payload,plen,arp_mac);return;}
+ if(plen>sizeof(pending_ip))return;
+ for(u32 i=0;i<plen;i++)pending_ip[i]=payload[i];pending_len=plen;pending_dst=dst;pending_proto=proto;pending_valid=1;
+ if(arp_ip!=next){arp_valid=0;arp_ip=next;send_arp_request(next);}
+}
+static void flush_pending(void){if(!pending_valid||!arp_valid||arp_ip==0)return;send_ipv4_raw(pending_dst,pending_proto,pending_ip,pending_len,arp_mac);pending_valid=0;}
+static u16 transport_checksum(u32 src,u32 dst,u8 proto,const u8*p,u16 n){
+ u32 sum=(src>>16)+(src&0xffff)+(dst>>16)+(dst&0xffff)+proto+n;
+ while(n>1){sum+=rd16(p);p+=2;n-=2;}if(n)sum+=(u16)(p[0]<<8);
+ while(sum>>16)sum=(sum&0xffff)+(sum>>16);return (u16)~sum;
+}
+static int dns_make_query(const char*name){
+ if(!configured||!dns_ip||!name)return 0;
+ u8 u[512];for(u32 i=0;i<512;i++)u[i]=0;wr16(u,53000);wr16(u+2,53);wr16(u+4,0);wr16(u+6,0);
+ u8*d=u+8;wr16(d,dns_id++);wr16(d+2,0x0100);wr16(d+4,1);u32 n=12;u32 start=0;
+ while(name[start]){
+  u32 end=start;while(name[end]&&name[end]!='.')end++;u32 l=end-start;if(!l||l>63||n+l+2>500)return 0;d[n++]=(u8)l;for(u32 j=start;j<end;j++)d[n++]=(u8)name[j];start=end;if(name[start]=='.')start++;else break;
+ }
+ d[n++]=0;wr16(d+n,1);n+=2;wr16(d+n,1);n+=2;wr16(u+4,(u16)(8+n));wr16(u+6,0);
+ dns_waiting=1;dns_done=0;dns_answer=0;send_ipv4(dns_ip,IP_UDP,u,(u16)(8+n));return 1;
+}
+static int dns_parse_response(const u8*p,u16 len){
+ if(len<20||rd16(p+8)!=dns_id-1||!(rd16(p+10)&0x8000)||rd16(p+12)==0)return 0;
+ u32 off=20;while(off<len&&p[off]){if((p[off]&0xC0)==0xC0){off+=2;break;}off+=(u32)p[off]+1;}if(off+5>len)return 0;off+=5;
+ u16 answers=rd16(p+14);for(u32 a=0;a<answers&&off+12<=len;a++){
+  if((p[off]&0xC0)==0xC0)off+=2;else{while(off<len&&p[off])off+=(u32)p[off]+1;off++;}
+  if(off+10>len)return 0;u16 type=rd16(p+off),klass=rd16(p+off+2),rdlen=rd16(p+off+8);off+=10;
+  if(off+rdlen>len)return 0;if(type==1&&klass==1&&rdlen==4){dns_answer=rd32(p+off);dns_done=1;dns_waiting=0;return 1;}off+=rdlen;
+ }return 0;
+}
+static void tcp_send_segment(u8 flags,const u8*data,u16 len){
+ u8 p[600];for(u32 i=0;i<sizeof(p);i++)p[i]=0;wr16(p,tcp_local_port);wr16(p+2,tcp_port);wr32(p+4,tcp_seq);wr32(p+8,tcp_ack);p[12]=0x50;p[13]=flags;wr16(p+14,4096);wr16(p+16,0);wr16(p+18,0);for(u32 i=0;i<len;i++)p[20+i]=data[i];wr16(p+16,transport_checksum(local_ip,tcp_remote,6,p,(u16)(20+len)));send_ipv4(tcp_remote,6,p,(u16)(20+len));
+}
+static void tcp_handle(const u8*ip,const u8*p,u16 len){
+ if(len<20||rd16(p+2)!=tcp_local_port||rd16(p)!=tcp_port)return;u8 hlen=(u8)((p[12]>>4)*4);if(hlen<20||hlen>len)return;
+ u8 flags=p[13];u32 seq=rd32(p+4),ack=rd32(p+8);
+ if(tcp_state==1&&(flags&0x12)==0x12&&ack==tcp_seq+1){tcp_ack=seq+1;tcp_seq++;tcp_state=2;tcp_send_segment(0x10,0,0);}
+ else if(tcp_state>=2){if((flags&0x10)&&ack>tcp_seq)tcp_seq=ack;if(len>hlen&&seq==tcp_ack){u16 n=(u16)(len-hlen);if(n>sizeof(tcp_rx)-tcp_rx_len)n=(u16)(sizeof(tcp_rx)-tcp_rx_len);for(u32 i=0;i<n;i++)tcp_rx[tcp_rx_len++]=p[hlen+i];tcp_ack+=n;tcp_send_segment(0x10,0,0);}if(flags&0x01){tcp_ack++;tcp_send_segment(0x10,0,0);tcp_state=4;}}
+ (void)ip;
+}
+
 static void send_arp_reply(const u8*dst,u32 target_ip){
  u8 p[42];eth_header(p,dst,ETH_ARP);wr16(p+14,1);wr16(p+16,ETH_IP);p[18]=6;p[19]=4;wr16(p+20,2);
  for(u32 i=0;i<6;i++){p[22+i]=mac[i];p[32+i]=dst[i];}wr32(p+28,local_ip);wr32(p+38,target_ip);(void)e1000_send(p,sizeof(p));
 }
 static void handle_arp(const u8*p,u16 len){
  if(len<42||rd16(p+14)!=1||rd16(p+16)!=ETH_IP||p[18]!=6||p[19]!=4)return;
- u32 target=rd32(p+38);if(rd16(p+20)==1&&target==local_ip)send_arp_reply(p+22,rd32(p+28));
+ u32 sender=rd32(p+28);if(sender){arp_ip=sender;for(u32 i=0;i<6;i++)arp_mac[i]=p[22+i];arp_valid=1;flush_pending();}u32 target=rd32(p+38);if(rd16(p+20)==1&&target==local_ip)send_arp_reply(p+22,rd32(p+28));
 }
 static void handle_dhcp(const u8*p,u16 len){
  if(len<ETH_LEN+IP_LEN+UDP_LEN+BOOTP_LEN)return;const u8*ip=p+ETH_LEN;u16 ihl=(u16)((ip[0]&15)*4);if(ihl<20||len<ETH_LEN+ihl+UDP_LEN+BOOTP_LEN)return;
@@ -62,8 +121,9 @@ static void handle_icmp(const u8*eth,const u8*ip,u16 ihl,u16 total){
 }
 static void handle_ipv4(const u8*p,u16 len){
  if(len<34)return;const u8*ip=p+14;u16 ihl=(u16)((ip[0]&15)*4),total=rd16(ip+2);if(ihl<20||total<ihl||len<14+total||checksum(ip,ihl)!=0)return;
- if(ip[9]==IP_UDP){const u8*u=ip+ihl;if(total>=ihl+8&&rd16(u+2)==DHCP_CLIENT)handle_dhcp(p,len);}
+ if(ip[9]==IP_UDP){const u8*u=ip+ihl;if(total>=ihl+8&&rd16(u+2)==DHCP_CLIENT)handle_dhcp(p,len);else if(total>=ihl+8&&rd16(u+2)==53000&&rd16(u)==53&&dns_waiting)dns_parse_response(u+8,(u16)(total-ihl-8));}
  else if(ip[9]==IP_ICMP)handle_icmp(p,ip,ihl,total);
+ else if(ip[9]==6&&total>=ihl+20){const u8*t=ip+ihl;u16 tl=(u16)(total-ihl);if(transport_checksum(rd32(ip+12),rd32(ip+16),6,t,tl)==0)tcp_handle(ip,t,tl);}
 }
 static void handle_frame(const u8*p,u16 len){if(len<14)return;u16 type=rd16(p+12);if(type==ETH_ARP)handle_arp(p,len);else if(type==ETH_IP)handle_ipv4(p,len);}
 void net_initialize(void){
@@ -78,3 +138,10 @@ void net_poll(void){
 }
 int net_is_configured(void){return configured;}
 u32 net_ipv4_address(void){return local_ip;}
+int net_dns_query(const char*name){return dns_make_query(name);}
+int net_dns_result(uint32_t*out){if(!dns_done||!out)return 0;*out=dns_answer;dns_done=0;return 1;}
+int net_tcp_connect(uint32_t ip,uint16_t port){if(!configured||!ip||!port||tcp_state==1||tcp_state==2)return 0;tcp_remote=ip;tcp_port=port;tcp_local_port++;tcp_seq+=0x1001;tcp_ack=0;tcp_rx_len=0;tcp_state=1;tcp_send_segment(0x02,0,0);return 1;}
+int net_tcp_connected(void){return tcp_state==2;}
+int net_tcp_send(const void*data,uint16_t len){if(tcp_state!=2||!data||!len||len>480)return 0;tcp_send_segment(0x18,(const u8*)data,len);tcp_seq+=len;return 1;}
+int net_tcp_read(void*out,uint16_t cap){if(!out||!cap||!tcp_rx_len)return 0;u16 n=tcp_rx_len<cap?tcp_rx_len:cap;u8*d=(u8*)out;for(u32 i=0;i<n;i++)d[i]=tcp_rx[i];for(u32 i=n;i<tcp_rx_len;i++)tcp_rx[i-n]=tcp_rx[i];tcp_rx_len-=n;return n;}
+void net_tcp_close(void){if(tcp_state==2)tcp_send_segment(0x11,0,0);tcp_state=0;}
