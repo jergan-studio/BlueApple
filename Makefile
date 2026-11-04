@@ -13,7 +13,7 @@ $(BUILD_DIR):
 $(BUILD_DIR)/boot.o: kernel/boot.asm | $(BUILD_DIR)
 	nasm -f elf32 $< -o $@
 
-$(BUILD_DIR)/kernel.o: kernel/kernel.c kernel/e1000.h | $(BUILD_DIR)
+$(BUILD_DIR)/kernel.o: kernel/kernel.c kernel/e1000.h kernel/net.h | $(BUILD_DIR)
 	gcc -m32 -ffreestanding -fno-pie -fno-stack-protector -O2 -Wall -Wextra -c $< -o $@
 
 $(BUILD_DIR)/e1000.o: kernel/e1000.c kernel/e1000.h | $(BUILD_DIR)
