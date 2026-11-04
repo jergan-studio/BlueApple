@@ -5,7 +5,6 @@ typedef uint8_t u8; typedef uint16_t u16; typedef uint32_t u32;
 #define ETH_LEN 14
 #define IP_LEN 20
 #define UDP_LEN 8
-#define DHCP_LEN  BOOTP_LEN
 #define BOOTP_LEN 240
 #define FRAME_MAX 1500
 #define ETH_ARP 0x0806
@@ -26,11 +25,10 @@ static u32 rd32(const u8*p){return ((u32)p[0]<<24)|((u32)p[1]<<16)|((u32)p[2]<<8
 static void wr16(u8*p,u16 v){p[0]=(u8)(v>>8);p[1]=(u8)v;}
 static void wr32(u8*p,u32 v){p[0]=(u8)(v>>24);p[1]=(u8)(v>>16);p[2]=(u8)(v>>8);p[3]=(u8)v;}
 static u16 checksum(const u8*p,u32 n){u32 sum=0;while(n>1){sum+=rd16(p);p+=2;n-=2;}if(n)sum+=(u16)(p[0]<<8);while(sum>>16)sum=(sum&0xffff)+(sum>>16);return (u16)~sum;}
-static int mac_equal(const u8*a,const u8*b){for(u32 i=0;i<6;i++)if(a[i]!=b[i])return 0;return 1;}
 static void eth_header(u8*p,const u8*dst,u16 type){for(u32 i=0;i<6;i++){p[i]=dst[i];p[6+i]=mac[i];}wr16(p+12,type);}
 static void send_dhcp(u8 type){
  u8 p[ETH_LEN+IP_LEN+UDP_LEN+BOOTP_LEN+64];u32 n=0;
- eth_header(p,broadcast_mac,ETH_IP);u8*ip=p+ETH_LEN;ip[0]=0x45;ip[1]=0;wr16(ip+2,IP_LEN+UDP_LEN+BOOTP_LEN+64);wr16(ip+4,ip_id++);wr16(ip+6,0x4000);ip[8]=64;ip[9]=IP_UDP;wr32(ip+12,0);wr32(ip+16,0);wr16(ip+10,0);wr16(ip+10,checksum(ip,IP_LEN));
+ eth_header(p,broadcast_mac,ETH_IP);u8*ip=p+ETH_LEN;ip[0]=0x45;ip[1]=0;wr16(ip+2,IP_LEN+UDP_LEN+BOOTP_LEN+64);wr16(ip+4,ip_id++);wr16(ip+6,0x4000);ip[8]=64;ip[9]=IP_UDP;wr32(ip+12,0);wr32(ip+16,0xFFFFFFFFu);wr16(ip+10,0);wr16(ip+10,checksum(ip,IP_LEN));
  u8*udp=ip+IP_LEN;wr16(udp,DHCP_CLIENT);wr16(udp+2,DHCP_SERVER);wr16(udp+4,UDP_LEN+BOOTP_LEN+64);wr16(udp+6,0);
  u8*b=udp+UDP_LEN;for(u32 i=0;i<BOOTP_LEN+64;i++)b[i]=0;b[0]=1;b[1]=1;b[2]=6;wr32(b+4,0x4241504Cu);for(u32 i=0;i<6;i++)b[28+i]=mac[i];wr32(b+236,0x63825363);
  u32 o=240;b[o++]=53;b[o++]=1;b[o++]=type;
@@ -43,7 +41,7 @@ static void send_arp_reply(const u8*dst,u32 target_ip){
  for(u32 i=0;i<6;i++){p[22+i]=mac[i];p[32+i]=dst[i];}wr32(p+28,local_ip);wr32(p+38,target_ip);(void)e1000_send(p,sizeof(p));
 }
 static void handle_arp(const u8*p,u16 len){
- if(len<28||rd16(p+14)!=1||rd16(p+16)!=ETH_IP||p[18]!=6||p[19]!=4)return;
+ if(len<42||rd16(p+14)!=1||rd16(p+16)!=ETH_IP||p[18]!=6||p[19]!=4)return;
  u32 target=rd32(p+38);if(rd16(p+20)==1&&target==local_ip)send_arp_reply(p+22,rd32(p+28));
 }
 static void handle_dhcp(const u8*p,u16 len){
