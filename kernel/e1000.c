@@ -71,6 +71,13 @@ int e1000_initialize(void){
  initialized=1;return 1;
 }
 int e1000_link_up(void){return initialized&&((rr(STATUS)&2u)!=0);}
+int e1000_get_mac(u8 out[6]){
+ if(!initialized||!out)return 0;
+ u32 low=rr(RAL),high=rr(RAH);
+ if(!(high&0x80000000u))return 0;
+ out[0]=(u8)low;out[1]=(u8)(low>>8);out[2]=(u8)(low>>16);out[3]=(u8)(low>>24);
+ out[4]=(u8)high;out[5]=(u8)(high>>8);return 1;
+}
 int e1000_send(const void* packet,u16 length){
  if(!initialized||!packet||length<14||length>BUF_SIZE)return 0;
  u32 i=tx_next;if(!(tx_ring[i].status&1u))return 0;
