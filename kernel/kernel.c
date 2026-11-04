@@ -384,7 +384,7 @@ static const orbit_app_t orbit_apps[] = {
     { APP_FILES, "BLUEFILES", "FILE MANAGER", 0x65B7FF },
     { APP_TERMINAL, "BLUETERM", "TERMINAL", 0x69E1AF },
     { APP_SETTINGS, "SETTINGS", "CONTROL CENTER", 0xB28AF5 },
-    { APP_WEB, "ORBIT WEB", "BROWSER", 0x8CCBFF },
+    { APP_WEB, "JREF BROWSER", "JREF SEARCH // WEB", 0x8CCBFF },
     { APP_PAINT, "ORBIT PAINT", "DRAWING APP", 0xF0B85A },
     { APP_ABOUT, "ABOUT", "BLUEAPPLE SYSTEM", 0x75D6C0 },
     { APP_WIFI, "WIFI", "WIRELESS NETWORKS", 0x70BFFF },
@@ -501,6 +501,11 @@ static char terminal_output[48] = "TYPE HELP AND PRESS ENTER";
 static char message_draft[48];
 static u32 message_draft_length = 0;
 static char last_message[48] = "WELCOME TO BLUEAPPLE";
+static char jref_address[64] = "jref-theta.vercel.app";
+static u32 jref_address_length = 21;
+static char jref_status[48] = "TYPE A DOMAIN AND PRESS ENTER";
+static u32 jref_resolved_ip = 0;
+static int jref_connect_started = 0;
 
 static void window_bounds(u32* x, u32* y, u32* width, u32* height) {
     *width = fb.width > 620 ? 500 : fb.width - 40;
@@ -562,26 +567,22 @@ static void draw_active_window(void) {
         draw_string(terminal_line, x + 38, y + 178, 1, rgb(240, 246, 255));
         draw_string(terminal_output, x + 24, y + 214, 1, rgb(105, 225, 175));
     } else if (active_app == APP_WEB) {
-        draw_string("ORBIT WEB // NETWORK STATUS", x + 24, y + 108, 1, rgb(225, 235, 250));
-        if (!e1000_link_up()) {
-            draw_string("VIRTUAL ETHERNET: LINK DOWN", x + 24, y + 142, 1, rgb(240, 185, 110));
-            draw_string("CHECK QEMU E1000 ADAPTER", x + 24, y + 172, 1, rgb(175, 195, 225));
-        } else if (!net_is_configured()) {
-            draw_string("E1000 ADAPTER: DETECTED", x + 24, y + 142, 1, rgb(105, 225, 175));
-            draw_string("DHCP: REQUESTING ADDRESS", x + 24, y + 172, 1, rgb(240, 185, 110));
-        } else {
-            u32 ip = net_ipv4_address();
-            draw_string("E1000: CONNECTED // DHCP OK", x + 24, y + 142, 1, rgb(105, 225, 175));
-            draw_string("IP ADDRESS:", x + 24, y + 172, 1, rgb(225, 235, 250));
-            draw_unsigned((ip >> 24) & 255, x + 112, y + 172, rgb(105, 225, 175));
-            draw_string(".", x + 130, y + 172, 1, rgb(225, 235, 250));
-            draw_unsigned((ip >> 16) & 255, x + 138, y + 172, rgb(105, 225, 175));
-            draw_string(".", x + 156, y + 172, 1, rgb(225, 235, 250));
-            draw_unsigned((ip >> 8) & 255, x + 164, y + 172, rgb(105, 225, 175));
-            draw_string(".", x + 182, y + 172, 1, rgb(225, 235, 250));
-            draw_unsigned(ip & 255, x + 190, y + 172, rgb(105, 225, 175));
+        draw_string("JREF // SEARCH & WEB", x + 24, y + 108, 1, rgb(225, 235, 250));
+        fill_round_rect(x + 20, y + 130, width - 40, 32, 8, rgb(31, 45, 65));
+        draw_string(jref_address, x + 30, y + 142, 1, rgb(240, 246, 255));
+        draw_string("EDIT DOMAIN ABOVE WITH KEYBOARD // ENTER TO CONNECT", x + 24, y + 178, 1, rgb(175, 195, 225));
+        draw_string(jref_status, x + 24, y + 210, 1, rgb(105, 225, 175));
+        if (jref_resolved_ip) {
+            draw_string("DNS:", x + 24, y + 240, 1, rgb(225, 235, 250));
+            draw_unsigned((jref_resolved_ip >> 24) & 255, x + 60, y + 240, rgb(105, 225, 175));
+            draw_string(".", x + 78, y + 240, 1, rgb(225, 235, 250));
+            draw_unsigned((jref_resolved_ip >> 16) & 255, x + 86, y + 240, rgb(105, 225, 175));
+            draw_string(".", x + 104, y + 240, 1, rgb(225, 235, 250));
+            draw_unsigned((jref_resolved_ip >> 8) & 255, x + 112, y + 240, rgb(105, 225, 175));
+            draw_string(".", x + 130, y + 240, 1, rgb(225, 235, 250));
+            draw_unsigned(jref_resolved_ip & 255, x + 138, y + 240, rgb(105, 225, 175));
         }
-        draw_string("WEB BROWSING: DNS / TCP NOT READY", x + 24, y + 208, 1, rgb(175, 195, 225));
+        draw_string("JREF WEB RESULTS NEED HTTP + TLS SUPPORT", x + 24, y + 270, 1, rgb(175, 195, 225));
     } else if (active_app == APP_PAINT) {
         fill_round_rect(x + 24, y + 108, width - 48, height - 132, 9, rgb(235, 239, 247));
         draw_string("CLICK CANVAS TO PAINT", x + 34, y + 90, 1, rgb(240, 246, 255));
@@ -1011,8 +1012,31 @@ static void keyboard_poll(void) {
     u8 status = inb(0x64);
     if (!(status & 1) || (status & 0x20)) return;
     u8 code = inb(0x60);
-    if ((code & 0x80) || (active_app != APP_TERMINAL && active_app != APP_MESSAGES)) return;
-    if (active_app == APP_TERMINAL) {
+    if ((code & 0x80) || (active_app != APP_TERMINAL && active_app != APP_MESSAGES && active_app != APP_WEB)) return;
+    if (active_app == APP_WEB) {
+        if (code == 0x1C) {
+            jref_address[jref_address_length] = 0;
+            jref_resolved_ip = 0;
+            jref_connect_started = 0;
+            if (net_is_configured() && net_dns_query(jref_address)) {
+                const char* msg = "DNS QUERY SENT"; u32 i = 0;
+                while (msg[i] && i < sizeof(jref_status)-1) { jref_status[i] = msg[i]; i++; }
+                jref_status[i] = 0;
+            } else {
+                const char* msg = "NETWORK NOT READY"; u32 i = 0;
+                while (msg[i] && i < sizeof(jref_status)-1) { jref_status[i] = msg[i]; i++; }
+                jref_status[i] = 0;
+            }
+        } else if (code == 0x0E) {
+            if (jref_address_length) jref_address[--jref_address_length] = 0;
+        } else {
+            char ch = keyboard_character(code);
+            if (ch && jref_address_length < sizeof(jref_address)-1) {
+                jref_address[jref_address_length++] = ch;
+                jref_address[jref_address_length] = 0;
+            }
+        }
+    } else if (active_app == APP_TERMINAL) {
         if (code == 0x1C) {
             terminal_execute();
         } else if (code == 0x0E) {
