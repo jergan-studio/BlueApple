@@ -108,3 +108,8 @@ The ISO is created at `build/blueapple.iso`.
 6. USB hardware testing and persistent live-session options.
 
 **Warning:** This is experimental software. Test in QEMU first. Do not use it as a daily operating system yet, and do not write experimental images to a USB containing files you need.
+
+
+### Jref Browser integration
+
+Orbit Web is being renamed to **Jref Browser**. The current native kernel UI provides a domain field prefilled with `jref-theta.vercel.app`; users can edit it with the keyboard and press Enter to request a DNS A-record lookup. When a result arrives, the UI attempts a TCP connection to port 443 and reports the connection state. This is a connectivity test only: the kernel does not yet implement TLS, HTTP requests/responses, HTML parsing, JavaScript, or page rendering, so it cannot display the hosted Jref website or search results yet. The next browser milestones are reliable TCP, TLS, HTTP(S), and a deliberately small HTML renderer/search interface.
