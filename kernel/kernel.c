@@ -524,14 +524,14 @@ static void draw_active_window(void) {
     if (width < 220 || height < 130) return;
 
     fill_round_rect(x + 5, y + 6, width, height, 13, rgb(5, 10, 22));
-    fill_round_rect(x, y, width, height, 13, rgb(238, 242, 248));
+    fill_round_rect(x, y, width, height, 13, rgb(20, 31, 55));
     fill_round_rect(x, y, width, 42, 13, rgb(48, 63, 82));
     fill_rect(x, y + 22, width, 20, rgb(48, 63, 82));
     fill_round_rect(x + width - 36, y + 8, 26, 26, 8, rgb(194, 77, 87));
     draw_string("X", x + width - 27, y + 15, 2, rgb(255, 255, 255));
     draw_app_icon(active_app, x + 10, y + 4, 30);
     draw_string(app->name, x + 48, y + 14, 2, rgb(240, 246, 255));
-    fill_round_rect(x + 18, y + 58, width - 36, 30, 8, rgb(222, 230, 240));
+    fill_round_rect(x + 18, y + 58, width - 36, 30, 8, rgb(31, 45, 65));
     draw_string(app->subtitle, x + 28, y + 69, 1, app->accent);
 
     if (active_app == APP_FILES) {
