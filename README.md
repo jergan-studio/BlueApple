@@ -40,6 +40,8 @@ The built-in app prototypes are:
 - **Users:** displays the local profile name configured in `load.ol`. This is not a multi-user login or account system.
 - **Messages:** lets you type and send a short local demo message with the keyboard. Messages are temporary and are not sent over a network.
 
+The Orbit Menu now uses a frame-stepped easing animation to slide upward from BlueDock when opened and slide away when closed. This is a visual prototype animation; its timing is currently a short CPU-delay loop rather than a calibrated timer.
+
 App windows can be opened from the dock, desktop shortcuts, or Orbit Menu, dragged by their title bars, and closed with the X control. The PS/2 mouse driver is polled by the kernel; its relative movement packets are accumulated into guest-screen coordinates. These are **BlueApple/QEMU guest coordinates**, not the Linux host desktop's absolute pointer coordinates.
 
 This remains an experimental kernel prototype, not a complete or daily-use operating system.
