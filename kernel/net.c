@@ -34,7 +34,7 @@ static void send_dhcp(u8 type){
  u32 o=240;b[o++]=53;b[o++]=1;b[o++]=type;
  if(type==3){b[o++]=50;b[o++]=4;wr32(b+o,offered_ip);o+=4;b[o++]=54;b[o++]=4;wr32(b+o,server_ip);o+=4;}
  b[o++]=55;b[o++]=3;b[o++]=1;b[o++]=3;b[o++]=6;b[o++]=255;
- wr16(udp+4,(u16)(UDP_LEN+o));wr16(ip+2,(u16)(IP_LEN+UDP_LEN+o));wr16(ip+10,0);wr16(ip+10,checksum(ip,IP_LEN));n=ETH_LEN+IP_LEN+UDP_LEN+o;(void)e1000_send(p,(u16)n);
+ wr16(udp+4,(u16)(UDP_LEN+BOOTP_LEN+60));wr16(ip+2,(u16)(IP_LEN+UDP_LEN+BOOTP_LEN+60));wr16(ip+10,0);wr16(ip+10,checksum(ip,IP_LEN));n=ETH_LEN+IP_LEN+UDP_LEN+BOOTP_LEN+60;(void)e1000_send(p,(u16)n);
 }
 static void send_arp_reply(const u8*dst,u32 target_ip){
  u8 p[42];eth_header(p,dst,ETH_ARP);wr16(p+14,1);wr16(p+16,ETH_IP);p[18]=6;p[19]=4;wr16(p+20,2);
