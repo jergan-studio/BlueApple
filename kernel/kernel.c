@@ -484,6 +484,7 @@ static void draw_app_icon(int app, u32 x, u32 y, u32 size) {
 
 static int active_app = APP_NONE;
 static int launcher_open = 0;
+static u32 launcher_progress = 0; /* 0 = hidden, 1000 = fully open */
 static int window_x = -1;
 static int window_y = -1;
 static int window_dragging = 0;
@@ -509,6 +510,7 @@ static void window_bounds(u32* x, u32* y, u32* width, u32* height) {
 static void open_app(int app) {
     active_app = app;
     launcher_open = 0;
+    launcher_progress = 0;
     window_x = -1;
     window_y = -1;
     window_dragging = 0;
@@ -592,20 +594,31 @@ static void draw_active_window(void) {
     }
 }
 static void draw_launcher(void) {
-    if (!launcher_open) return;
+    if (!launcher_progress) return;
     u32 width = fb.width > 360 ? 300 : fb.width - 24;
     u32 row_height = 38;
     u32 height = 42 + (u32)ORBIT_APP_COUNT * 44;
     u32 x = 18;
-    u32 y = fb.height > height + 70 ? fb.height - height - 70 : 48;
-    fill_round_rect(x + 4, y + 5, width, height, 14, rgb(5, 10, 22));
-    fill_round_rect(x, y, width, height, 14, rgb(40, 49, 64));
-    fill_round_rect(x, y, width, 40, 14, rgb(57, 77, 103));
-    fill_rect(x, y + 22, width, 18, rgb(57, 77, 103));
-    draw_string("ORBIT MENU", x + 14, y + 13, 2, rgb(240, 246, 255));
+    u32 final_y = fb.height > height + 70 ? fb.height - height - 70 : 48;
+    u32 visible_height = height * launcher_progress / 1000;
+    u32 y = final_y + height - visible_height;
+
+    /* The menu rises from the dock; only rows inside the revealed area render. */
+    fill_round_rect(x + 4, y + 5, width, visible_height, 14, rgb(5, 10, 22));
+    fill_round_rect(x, y, width, visible_height, 14, rgb(40, 49, 64));
+    if (visible_height > 2) {
+        fill_round_rect(x, y, width, visible_height < 40 ? visible_height : 40,
+                        14, rgb(57, 77, 103));
+        if (visible_height > 22)
+            fill_rect(x, y + 22, width, visible_height - 22 < 18 ? visible_height - 22 : 18,
+                      rgb(57, 77, 103));
+    }
+    if (visible_height > 30)
+        draw_string("ORBIT MENU", x + 14, y + 13, 2, rgb(240, 246, 255));
 
     for (u32 i = 0; i < ORBIT_APP_COUNT; i++) {
         u32 row_y = y + 44 + i * 44;
+        if (row_y + row_height > y + visible_height) continue;
         fill_round_rect(x + 10, row_y, width - 20, row_height, 8, rgb(54, 68, 87));
         draw_app_icon(orbit_apps[i].id, x + 17, row_y + 6, 26);
         draw_string(orbit_apps[i].name, x + 54, row_y + 15, 1, rgb(240, 246, 255));
@@ -615,6 +628,21 @@ static void render_desktop(void) {
     draw_orbit_desktop();
     draw_active_window();
     draw_launcher();
+}
+
+/* Small frame-stepped easing animation; works without a timer/interrupt system. */
+static void animate_launcher(int opening) {
+    if (opening) launcher_open = 1;
+    for (u32 frame = 1; frame <= 8; frame++) {
+        u32 eased = frame * frame * 1000 / 64;
+        launcher_progress = opening ? eased : 1000 - eased;
+        render_desktop();
+        for (volatile u32 delay = 0; delay < 70000; delay++)
+            __asm__ volatile ("pause");
+    }
+    launcher_progress = opening ? 1000 : 0;
+    launcher_open = opening ? 1 : 0;
+    render_desktop();
 }
 
 static void desktop_click(int mouse_x, int mouse_y) {
@@ -632,7 +660,7 @@ static void desktop_click(int mouse_x, int mouse_y) {
         if (mouse_x >= (int)dock_x + 8 && item >= 0 && item < 6) {
             if (item == 0) {
                 active_app = APP_NONE;
-                launcher_open = !launcher_open;
+                animate_launcher(!launcher_open);
             } else if (item == 1) open_app(APP_FILES);
             else if (item == 2) open_app(APP_TERMINAL);
             else if (item == 3) open_app(APP_WEB);
@@ -651,12 +679,14 @@ static void desktop_click(int mouse_x, int mouse_y) {
             for (u32 i = 0; i < ORBIT_APP_COUNT; i++) {
                 u32 row_y = menu_y + 44 + i * 44;
                 if (mouse_y >= (int)row_y && mouse_y < (int)(row_y + 38)) {
-                    open_app(orbit_apps[i].id);
+                    int selected_app = orbit_apps[i].id;
+                    animate_launcher(0);
+                    open_app(selected_app);
                     return;
                 }
             }
         }
-        launcher_open = 0;
+        animate_launcher(0);
         return;
     }
 
