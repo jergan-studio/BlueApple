@@ -46,6 +46,17 @@ App windows can be opened from the dock, desktop shortcuts, or Orbit Menu, dragg
 
 This remains an experimental kernel prototype, not a complete or daily-use operating system.
 
+## QEMU networking milestone
+
+The Local/QEMU launch now attaches a user-mode QEMU network backend and an Intel E1000 (82540EM-compatible) virtual PCI adapter. The kernel includes a polling E1000 driver that:
+- scans PCI configuration space for vendor/device ID 8086:100E;
+- enables PCI memory-space access and bus mastering;
+- initializes receive/transmit descriptor rings and DMA buffers;
+- exposes Ethernet frame send/receive functions and polls received frames.
+
+This is the hardware-driver and Ethernet-frame-I/O foundation only. **BlueApple does not yet have DHCP, ARP, IPv4 routing, DNS, TCP, TLS, or an HTTP client**, so this commit does not yet provide usable internet access inside Orbit Web. The next networking milestones are DHCP address configuration, ARP/IPv4/ICMP, DNS, then TCP before browser traffic can work. QEMU user networking supplies NAT/DHCP services to a guest once those protocols are implemented; it does not automatically give this kernel a configured IP address.
+
+The E1000 driver is polling-only and assumes the current no-paging kernel identity-maps its DMA buffers. It targets QEMU's -device e1000 model, not physical Wi-Fi adapters.
 ## Safety design
 
 - M1 is designed as the USB Live profile.
