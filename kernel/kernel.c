@@ -1,4 +1,5 @@
 /* BlueApple OS - Orbit framebuffer desktop, with VGA fallback */
+#include "e1000.h"
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
@@ -1053,9 +1054,11 @@ void kernel_main(u32 magic, const multiboot_info_t* info) {
         draw_mouse_coordinates();
         cursor_draw();
         mouse_initialize();
+        (void)e1000_initialize();
         for (;;) {
             keyboard_poll();
             mouse_poll();
+            e1000_poll();
             __asm__ volatile ("pause");
         }
     } else {
