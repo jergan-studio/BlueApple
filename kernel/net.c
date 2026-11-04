@@ -76,8 +76,8 @@ static int dns_make_query(const char*name){
  dns_waiting=1;dns_done=0;dns_answer=0;send_ipv4(dns_ip,IP_UDP,u,(u16)(8+n));return 1;
 }
 static int dns_parse_response(const u8*p,u16 len){
- if(len<20||rd16(p+8)!=dns_id-1||!(rd16(p+10)&0x8000)||rd16(p+12)==0)return 0;
- u32 off=20;while(off<len&&p[off]){if((p[off]&0xC0)==0xC0){off+=2;break;}off+=(u32)p[off]+1;}if(off+5>len)return 0;off+=5;
+ if(len<12||rd16(p)!=((u16)(dns_id-1))||!(rd16(p+2)&0x8000)||rd16(p+4)==0)return 0;
+ u32 off=12;while(off<len&&p[off]){if((p[off]&0xC0)==0xC0){off+=2;break;}off+=(u32)p[off]+1;}if(off+5>len)return 0;off+=5;
  u16 answers=rd16(p+14);for(u32 a=0;a<answers&&off+12<=len;a++){
   if((p[off]&0xC0)==0xC0)off+=2;else{while(off<len&&p[off])off+=(u32)p[off]+1;off++;}
   if(off+10>len)return 0;u16 type=rd16(p+off),klass=rd16(p+off+2),rdlen=rd16(p+off+8);off+=10;
