@@ -210,6 +210,24 @@ static void fill_circle(u32 cx, u32 cy, u32 radius, u32 color) {
                 pixel((u32)((int)cx + dx), (u32)((int)cy + dy), color);
 }
 
+/* Rounded rectangle primitive used by Orbit's panels, cards and windows. */
+static void fill_round_rect(u32 x, u32 y, u32 width, u32 height,
+                            u32 radius, u32 color) {
+    if (!width || !height || x >= fb.width || y >= fb.height) return;
+    if (radius > width / 2) radius = width / 2;
+    if (radius > height / 2) radius = height / 2;
+    if (!radius) {
+        fill_rect(x, y, width, height, color);
+        return;
+    }
+    fill_rect(x + radius, y, width - radius * 2, height, color);
+    fill_rect(x, y + radius, width, height - radius * 2, color);
+    fill_circle(x + radius, y + radius, radius, color);
+    fill_circle(x + width - radius - 1, y + radius, radius, color);
+    fill_circle(x + radius, y + height - radius - 1, radius, color);
+    fill_circle(x + width - radius - 1, y + height - radius - 1, radius, color);
+}
+
 /* BlueApple's own mark: a blue apple silhouette with a green leaf. */
 static void draw_blueapple_logo(u32 x, u32 y, u32 size, u32 background) {
     u32 blue = rgb(75, 165, 255);
@@ -287,15 +305,16 @@ static void draw_orbit_desktop(void) {
     /* Deep-blue Orbit wallpaper with a soft diagonal color shift. */
     for (u32 y = 0; y < fb.height; y++) {
         for (u32 x = 0; x < fb.width; x++) {
-            u32 glow = (x * 24 / (fb.width ? fb.width : 1)) +
-                       (y * 18 / (fb.height ? fb.height : 1));
-            pixel(x, y, rgb((u8)(8 + glow / 3), (u8)(20 + glow / 2),
-                            (u8)(55 + glow)));
+            u32 glow = (x * 18 / (fb.width ? fb.width : 1)) +
+                       (y * 22 / (fb.height ? fb.height : 1));
+            pixel(x, y, rgb((u8)(13 + glow / 2), (u8)(31 + glow / 2),
+                            (u8)(72 + glow)));
         }
     }
 
     /* Orbit Bar */
-    fill_rect(0, 0, fb.width, 42, rgb(10, 17, 36));
+    fill_rect(0, 0, fb.width, 44, rgb(34, 39, 48));
+    fill_rect(0, 43, fb.width, 1, rgb(65, 76, 92));
     draw_blueapple_logo(16, 7, 28, rgb(10, 17, 36));
     draw_string("BLUEAPPLE", 52, 16, 2, rgb(225, 238, 255));
     draw_string(current_username, 180, 16, 1, rgb(190, 215, 245));
@@ -307,16 +326,19 @@ static void draw_orbit_desktop(void) {
     draw_string("WIFI", 360, 18, 1, rgb(145, 180, 230));
 
     /* Desktop shortcut tiles */
+    fill_round_rect(30, 78, 72, 76, 10, rgb(25, 53, 91));
+    fill_round_rect(30, 158, 86, 76, 10, rgb(25, 53, 91));
     draw_app_icon(1, 50, 88, 32);
-    draw_app_icon(2, 50, 156, 32);
+    draw_app_icon(2, 50, 168, 32);
     draw_string("FILES", 42, 136, 1, rgb(245, 248, 255));
-    draw_string("SETTINGS", 35, 204, 1, rgb(245, 248, 255));
+    draw_string("SETTINGS", 35, 218, 1, rgb(245, 248, 255));
 
     /* BlueDock */
     u32 dock_width = fb.width < 620 ? fb.width - 24 : 560;
     u32 dock_x = (fb.width - dock_width) / 2;
     u32 dock_y = fb.height > 100 ? fb.height - 76 : 0;
-    fill_rect(dock_x, dock_y, dock_width, 54, rgb(14, 24, 48));
+    fill_round_rect(dock_x + 3, dock_y + 3, dock_width, 54, 13, rgb(5, 12, 27));
+    fill_round_rect(dock_x, dock_y, dock_width, 54, 13, rgb(34, 42, 57));
     static const int dock_apps[6] = { 0, 1, 3, 4, 2, 9 };
     for (u32 i = 0; i < 6; i++) {
         u32 icon_x = dock_x + 18 + i * 66;
@@ -501,21 +523,25 @@ static void draw_active_window(void) {
     window_bounds(&x, &y, &width, &height);
     if (width < 220 || height < 130) return;
 
-    fill_rect(x, y, width, height, rgb(20, 31, 55));
-    fill_rect(x, y, width, 38, rgb(35, 57, 91));
-    fill_rect(x + width - 34, y + 7, 24, 24, rgb(190, 65, 78));
+    fill_round_rect(x + 5, y + 6, width, height, 13, rgb(5, 10, 22));
+    fill_round_rect(x, y, width, height, 13, rgb(238, 242, 248));
+    fill_round_rect(x, y, width, 42, 13, rgb(48, 63, 82));
+    fill_rect(x, y + 22, width, 20, rgb(48, 63, 82));
+    fill_round_rect(x + width - 36, y + 8, 26, 26, 8, rgb(194, 77, 87));
     draw_string("X", x + width - 27, y + 15, 2, rgb(255, 255, 255));
     draw_app_icon(active_app, x + 10, y + 4, 30);
     draw_string(app->name, x + 48, y + 14, 2, rgb(240, 246, 255));
-    draw_string(app->subtitle, x + 24, y + 68, 2, app->accent);
+    fill_round_rect(x + 18, y + 58, width - 36, 30, 8, rgb(222, 230, 240));
+    draw_string(app->subtitle, x + 28, y + 69, 1, app->accent);
 
     if (active_app == APP_FILES) {
-        draw_string("BLUEAPPLE SYSTEM", x + 24, y + 108, 1, rgb(225, 235, 250));
-        draw_string("LOAD.OL", x + 34, y + 142, 1, rgb(105, 185, 255));
-        draw_string("BOOT CONFIGURATION", x + 132, y + 142, 1, rgb(185, 205, 230));
-        draw_string("BLUEAPPLE.ELF", x + 34, y + 170, 1, rgb(105, 185, 255));
-        draw_string("KERNEL IMAGE", x + 132, y + 170, 1, rgb(185, 205, 230));
-        draw_string("VIRTUAL VIEW - DISK DRIVER NOT READY", x + 24, y + 220, 1, rgb(175, 195, 225));
+        fill_round_rect(x + 18, y + 98, width - 36, height - 116, 9, rgb(222, 230, 240));
+        draw_string("BLUEAPPLE SYSTEM", x + 30, y + 112, 1, rgb(40, 58, 82));
+        draw_string("LOAD.OL", x + 34, y + 142, 1, rgb(35, 105, 190));
+        draw_string("BOOT CONFIGURATION", x + 132, y + 142, 1, rgb(65, 78, 98));
+        draw_string("BLUEAPPLE.ELF", x + 34, y + 170, 1, rgb(35, 105, 190));
+        draw_string("KERNEL IMAGE", x + 132, y + 170, 1, rgb(65, 78, 98));
+        draw_string("VIRTUAL VIEW - DISK DRIVER NOT READY", x + 30, y + 220, 1, rgb(65, 78, 98));
     } else if (active_app == APP_SETTINGS) {
         draw_string("DISPLAY PROFILE", x + 24, y + 108, 1, rgb(225, 235, 250));
         draw_string("ORBIT BLUE THEME", x + 34, y + 138, 1, rgb(178, 138, 245));
@@ -534,7 +560,7 @@ static void draw_active_window(void) {
         draw_string("NETWORK DRIVER NOT INSTALLED", x + 24, y + 142, 1, rgb(175, 195, 225));
         draw_string("NO INTERNET CONNECTION", x + 24, y + 172, 1, rgb(175, 195, 225));
     } else if (active_app == APP_PAINT) {
-        fill_rect(x + 24, y + 108, width - 48, height - 132, rgb(235, 239, 247));
+        fill_round_rect(x + 24, y + 108, width - 48, height - 132, 9, rgb(235, 239, 247));
         draw_string("CLICK CANVAS TO PAINT", x + 34, y + 90, 1, rgb(240, 246, 255));
         for (u32 i = 0; i < paint_point_count; i++)
             fill_rect(x + 24 + (u32)paint_points_x[i], y + 108 + (u32)paint_points_y[i], 5, 5, rgb(35, 105, 220));
@@ -572,13 +598,15 @@ static void draw_launcher(void) {
     u32 height = 42 + (u32)ORBIT_APP_COUNT * 44;
     u32 x = 18;
     u32 y = fb.height > height + 70 ? fb.height - height - 70 : 48;
-    fill_rect(x, y, width, height, rgb(18, 29, 53));
-    fill_rect(x, y, width, 36, rgb(38, 62, 98));
+    fill_round_rect(x + 4, y + 5, width, height, 14, rgb(5, 10, 22));
+    fill_round_rect(x, y, width, height, 14, rgb(40, 49, 64));
+    fill_round_rect(x, y, width, 40, 14, rgb(57, 77, 103));
+    fill_rect(x, y + 22, width, 18, rgb(57, 77, 103));
     draw_string("ORBIT MENU", x + 14, y + 13, 2, rgb(240, 246, 255));
 
     for (u32 i = 0; i < ORBIT_APP_COUNT; i++) {
         u32 row_y = y + 44 + i * 44;
-        fill_rect(x + 10, row_y, width - 20, row_height, rgb(34, 66, 105));
+        fill_round_rect(x + 10, row_y, width - 20, row_height, 8, rgb(54, 68, 87));
         draw_app_icon(orbit_apps[i].id, x + 17, row_y + 6, 26);
         draw_string(orbit_apps[i].name, x + 54, row_y + 15, 1, rgb(240, 246, 255));
     }
@@ -764,7 +792,7 @@ static void draw_unsigned(u32 value, u32 x, u32 y, u32 color) {
 static void draw_mouse_coordinates(void) {
     /* Keep the coordinate HUD compact at the far right of the Orbit Bar. */
     u32 left = fb.width > 260 ? fb.width - 126 : 4;
-    fill_rect(left, 7, fb.width > 260 ? 122 : fb.width - 8, 27, rgb(10, 17, 36));
+    fill_round_rect(left, 7, fb.width > 260 ? 122 : fb.width - 8, 27, 8, rgb(48, 57, 71));
     draw_string("X", left + 4, 16, 1, rgb(145, 180, 230));
     draw_unsigned((u32)cursor_x, left + 17, 16, rgb(235, 245, 255));
     draw_string("Y", left + 66, 16, 1, rgb(145, 180, 230));
