@@ -15,8 +15,6 @@ typedef uint8_t u8; typedef uint16_t u16; typedef uint32_t u32;
 #define DHCP_CLIENT 68
 #define DHCP_SERVER 67
 static const u8 broadcast_mac[6]={255,255,255,255,255,255};
-static const u8 zero_mac[6]={0,0,0,0,0,0};
-static const u8 local_mac[6]={0x52,0x54,0x00,0x12,0x34,0x56};
 static u8 mac[6];
 static u32 local_ip, offered_ip, server_ip, gateway_ip, subnet_mask, dns_ip;
 static u16 ip_id=1;
@@ -30,10 +28,6 @@ static void wr32(u8*p,u32 v){p[0]=(u8)(v>>24);p[1]=(u8)(v>>16);p[2]=(u8)(v>>8);p
 static u16 checksum(const u8*p,u32 n){u32 sum=0;while(n>1){sum+=rd16(p);p+=2;n-=2;}if(n)sum+=(u16)(p[0]<<8);while(sum>>16)sum=(sum&0xffff)+(sum>>16);return (u16)~sum;}
 static int mac_equal(const u8*a,const u8*b){for(u32 i=0;i<6;i++)if(a[i]!=b[i])return 0;return 1;}
 static void eth_header(u8*p,const u8*dst,u16 type){for(u32 i=0;i<6;i++){p[i]=dst[i];p[6+i]=mac[i];}wr16(p+12,type);}
-static void send_arp_request(u32 target){
- u8 p[42];eth_header(p,broadcast_mac,ETH_ARP);wr16(p+14,1);wr16(p+16,ETH_IP);p[18]=6;p[19]=4;wr16(p+20,1);
- for(u32 i=0;i<6;i++)p[22+i]=mac[i];wr32(p+28,local_ip);for(u32 i=0;i<6;i++)p[32+i]=0;wr32(p+38,target);(void)e1000_send(p,sizeof(p));
-}
 static void send_dhcp(u8 type){
  u8 p[ETH_LEN+IP_LEN+UDP_LEN+BOOTP_LEN+64];u32 n=0;
  eth_header(p,broadcast_mac,ETH_IP);u8*ip=p+ETH_LEN;ip[0]=0x45;ip[1]=0;wr16(ip+2,IP_LEN+UDP_LEN+BOOTP_LEN+64);wr16(ip+4,ip_id++);wr16(ip+6,0x4000);ip[8]=64;ip[9]=IP_UDP;wr32(ip+12,0);wr32(ip+16,0);wr16(ip+10,0);wr16(ip+10,checksum(ip,IP_LEN));
@@ -58,7 +52,7 @@ static void handle_dhcp(const u8*p,u16 len){
  if(b[0]!=2||rd32(b+4)!=0x4241504Cu||rd32(b+236)!=0x63825363)return;
  offered_ip=rd32(b+16);server_ip=rd32(b+20);u8 msg=0;u32 mask=0,router=0,dns=0;u32 end=rd16(udp+4)-UDP_LEN;
  for(u32 i=240;i<end;){u8 tag=b[i++];if(tag==255)break;if(tag==0)continue;if(i>=end)break;u8 l=b[i++];if(i+l>end)break;
-  if(tag==53&&l==1)msg=b[i];else if(tag==1&&l==4)mask=rd32(b+i);else if(tag==3&&l>=4)router=rd32(b+i);else if(tag==6&&l>=4)dns=rd32(b+i);i+=l;
+  if(tag==53&&l==1)msg=b[i];else if(tag==1&&l==4)mask=rd32(b+i);else if(tag==3&&l>=4)router=rd32(b+i);else if(tag==6&&l>=4)dns=rd32(b+i);else if(tag==54&&l==4)server_ip=rd32(b+i);i+=l;
  }
  if(msg==2&&dhcp_state==1){if(!offered_ip||!server_ip)return;dhcp_state=2;send_dhcp(3);}
  else if(msg==5&&dhcp_state==2){local_ip=offered_ip;subnet_mask=mask;gateway_ip=router;dns_ip=dns;configured=1;dhcp_state=3;}
@@ -76,8 +70,7 @@ static void handle_ipv4(const u8*p,u16 len){
 static void handle_frame(const u8*p,u16 len){if(len<14)return;u16 type=rd16(p+12);if(type==ETH_ARP)handle_arp(p,len);else if(type==ETH_IP)handle_ipv4(p,len);}
 void net_initialize(void){
  configured=0;dhcp_state=0;local_ip=offered_ip=server_ip=gateway_ip=subnet_mask=dns_ip=0;
- /* QEMU user-mode networking's default E1000 MAC. Read the actual device MAC via its driver is added below. */
- for(u32 i=0;i<6;i++)mac[i]=local_mac[i];
+ (void)e1000_get_mac(mac);
 }
 void net_poll(void){
  if(!e1000_link_up())return;
