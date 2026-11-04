@@ -4,6 +4,7 @@
 int e1000_initialize(void);
 void e1000_poll(void);
 int e1000_link_up(void);
+int e1000_get_mac(uint8_t out[6]);
 int e1000_send(const void* packet, uint16_t length);
 int e1000_receive(uint8_t* packet, uint16_t capacity);
 #endif
