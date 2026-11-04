@@ -299,7 +299,7 @@ static void draw_orbit_desktop(void) {
                   (i == 1 ? rgb(90, 205, 175) :
                   (i == 2 ? rgb(225, 180, 85) :
                   (i == 3 ? rgb(175, 130, 245) :
-                  (i == 4 ? rgb(220, 230, 245) : rgb(105, 225, 175)))));
+                  (i == 4 ? rgb(220, 230, 245) : rgb(105, 225, 175))))));
     }
     draw_string("MENU", dock_x + 17, dock_y + 43, 1, rgb(205, 220, 245));
     draw_string("FILES", dock_x + 82, dock_y + 43, 1, rgb(205, 220, 245));
