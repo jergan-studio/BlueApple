@@ -202,6 +202,31 @@ static void fill_rect(u32 x, u32 y, u32 width, u32 height, u32 color) {
             pixel(x + xx, y + yy, color);
 }
 
+static void fill_circle(u32 cx, u32 cy, u32 radius, u32 color) {
+    int rr = (int)(radius * radius);
+    for (int dy = -(int)radius; dy <= (int)radius; dy++)
+        for (int dx = -(int)radius; dx <= (int)radius; dx++)
+            if (dx * dx + dy * dy <= rr)
+                pixel((u32)((int)cx + dx), (u32)((int)cy + dy), color);
+}
+
+/* BlueApple's own mark: a blue apple silhouette with a green leaf. */
+static void draw_blueapple_logo(u32 x, u32 y, u32 size, u32 background) {
+    u32 blue = rgb(75, 165, 255);
+    u32 leaf = rgb(105, 220, 155);
+    fill_circle(x + size * 36 / 100, y + size * 59 / 100, size * 25 / 100, blue);
+    fill_circle(x + size * 64 / 100, y + size * 59 / 100, size * 25 / 100, blue);
+    fill_rect(x + size * 17 / 100, y + size * 52 / 100,
+              size * 66 / 100, size * 25 / 100, blue);
+    fill_circle(x + size * 50 / 100, y + size * 70 / 100, size * 29 / 100, blue);
+    /* Leaf and small stem. */
+    fill_rect(x + size * 48 / 100, y + size * 10 / 100,
+              size * 5 / 100 + 1, size * 18 / 100, rgb(180, 205, 225));
+    fill_circle(x + size * 65 / 100, y + size * 16 / 100, size * 13 / 100, leaf);
+    /* A small bite gives the mark a recognizable apple profile. */
+    fill_circle(x + size * 86 / 100, y + size * 43 / 100, size * 12 / 100, background);
+}
+
 
 /* Compact 5x7 font for readable Orbit UI labels (uppercase and digits). */
 static const u8 font[36][5] = {
@@ -255,6 +280,9 @@ static void draw_string(const char* text, u32 x, u32 y, u32 scale, u32 color) {
     }
 }
 
+
+static void draw_app_icon(int app, u32 x, u32 y, u32 size);
+
 static void draw_orbit_desktop(void) {
     /* Deep-blue Orbit wallpaper with a soft diagonal color shift. */
     for (u32 y = 0; y < fb.height; y++) {
@@ -268,9 +296,8 @@ static void draw_orbit_desktop(void) {
 
     /* Orbit Bar */
     fill_rect(0, 0, fb.width, 42, rgb(10, 17, 36));
-    fill_rect(18, 12, 18, 18, rgb(65, 155, 255));
-    fill_rect(23, 16, 8, 10, rgb(235, 245, 255));
-    draw_string("BLUEAPPLE", 48, 16, 2, rgb(225, 238, 255));
+    draw_blueapple_logo(16, 7, 28, rgb(10, 17, 36));
+    draw_string("BLUEAPPLE", 52, 16, 2, rgb(225, 238, 255));
     draw_string(current_username, 180, 16, 1, rgb(190, 215, 245));
     /* Small Wi-Fi status glyph: icon is present, radio support is a future driver. */
     fill_rect(340, 22, 4, 4, rgb(130, 175, 225));
@@ -280,10 +307,8 @@ static void draw_orbit_desktop(void) {
     draw_string("WIFI", 360, 18, 1, rgb(145, 180, 230));
 
     /* Desktop shortcut tiles */
-    fill_rect(42, 82, 48, 48, rgb(30, 75, 135));
-    fill_rect(52, 92, 28, 28, rgb(95, 175, 255));
-    fill_rect(42, 150, 48, 48, rgb(30, 75, 135));
-    fill_rect(53, 161, 26, 26, rgb(110, 220, 190));
+    draw_app_icon(1, 50, 88, 32);
+    draw_app_icon(2, 50, 156, 32);
     draw_string("FILES", 42, 136, 1, rgb(245, 248, 255));
     draw_string("SETTINGS", 35, 204, 1, rgb(245, 248, 255));
 
@@ -292,14 +317,13 @@ static void draw_orbit_desktop(void) {
     u32 dock_x = (fb.width - dock_width) / 2;
     u32 dock_y = fb.height > 100 ? fb.height - 76 : 0;
     fill_rect(dock_x, dock_y, dock_width, 54, rgb(14, 24, 48));
+    static const int dock_apps[6] = { 0, 1, 3, 4, 2, 9 };
     for (u32 i = 0; i < 6; i++) {
         u32 icon_x = dock_x + 18 + i * 66;
-        fill_rect(icon_x, dock_y + 8, 32, 32,
-                  i == 0 ? rgb(65, 155, 255) :
-                  (i == 1 ? rgb(90, 205, 175) :
-                  (i == 2 ? rgb(225, 180, 85) :
-                  (i == 3 ? rgb(175, 130, 245) :
-                  (i == 4 ? rgb(220, 230, 245) : rgb(105, 225, 175))))));
+        if (dock_apps[i] == 0)
+            draw_blueapple_logo(icon_x + 2, dock_y + 10, 28, rgb(14, 24, 48));
+        else
+            draw_app_icon(dock_apps[i], icon_x, dock_y + 8, 32);
     }
     draw_string("MENU", dock_x + 17, dock_y + 43, 1, rgb(205, 220, 245));
     draw_string("FILES", dock_x + 82, dock_y + 43, 1, rgb(205, 220, 245));
@@ -350,6 +374,92 @@ static const orbit_app_t* find_app(int id) {
         if (orbit_apps[i].id == id) return &orbit_apps[i];
     return 0;
 }
+
+static void icon_rect(u32 x, u32 y, u32 size, u32 rx, u32 ry,
+                      u32 rw, u32 rh, u32 color) {
+    u32 xx = x + rx * size / 32, yy = y + ry * size / 32;
+    u32 ww = rw * size / 32, hh = rh * size / 32;
+    fill_rect(xx, yy, ww ? ww : 1, hh ? hh : 1, color);
+}
+static void icon_disc(u32 x, u32 y, u32 size, u32 cx, u32 cy,
+                      u32 radius, u32 color) {
+    u32 scale = size / 32;
+    if (!scale) scale = 1;
+    fill_circle(x + cx * size / 32, y + cy * size / 32,
+                radius * scale, color);
+}
+
+/* Pixel-art style icons, drawn entirely by the kernel. */
+static void draw_app_icon(int app, u32 x, u32 y, u32 size) {
+    u32 bg = rgb(28, 48, 78);
+    u32 white = rgb(238, 245, 255);
+    u32 blue = rgb(100, 180, 255);
+    u32 accent = blue;
+
+    if (app == 1) accent = rgb(245, 190, 85);       /* Files */
+    else if (app == 2) accent = rgb(105, 225, 175);  /* Settings */
+    else if (app == 3) accent = rgb(100, 220, 180); /* Terminal */
+    else if (app == 4) accent = rgb(115, 190, 255); /* Web */
+    else if (app == 5) accent = rgb(245, 175, 85);  /* Paint */
+    else if (app == 6) accent = rgb(110, 220, 195); /* About */
+    else if (app == 7) accent = rgb(100, 190, 255); /* Wi-Fi */
+    else if (app == 8) accent = rgb(205, 155, 255); /* Users */
+    else if (app == 9) accent = rgb(100, 220, 195); /* Messages */
+
+    fill_rect(x, y, size, size, bg);
+    if (app == 1) {
+        icon_rect(x,y,size,4,10,24,17,accent);
+        icon_rect(x,y,size,5,6,11,7,accent);
+        icon_rect(x,y,size,7,14,18,2,rgb(255,225,155));
+    } else if (app == 2) {
+        icon_rect(x,y,size,13,3,6,26,accent);
+        icon_rect(x,y,size,3,13,26,6,accent);
+        icon_disc(x,y,size,16,16,7,bg);
+        icon_disc(x,y,size,16,16,3,white);
+    } else if (app == 3) {
+        icon_rect(x,y,size,4,6,24,20,rgb(9,18,30));
+        icon_rect(x,y,size,8,11,3,3,accent);
+        icon_rect(x,y,size,11,14,3,3,accent);
+        icon_rect(x,y,size,14,17,3,3,accent);
+        icon_rect(x,y,size,19,21,7,2,white);
+    } else if (app == 4) {
+        icon_disc(x,y,size,16,16,13,accent);
+        icon_disc(x,y,size,16,16,9,bg);
+        icon_rect(x,y,size,15,3,2,26,accent);
+        icon_rect(x,y,size,4,15,24,2,accent);
+        icon_rect(x,y,size,7,9,18,2,accent);
+        icon_rect(x,y,size,7,21,18,2,accent);
+    } else if (app == 5) {
+        icon_disc(x,y,size,13,17,10,accent);
+        icon_disc(x,y,size,11,13,2,white);
+        icon_disc(x,y,size,17,11,2,white);
+        icon_disc(x,y,size,21,17,2,white);
+        icon_rect(x,y,size,20,3,3,13,rgb(210,225,245));
+    } else if (app == 6) {
+        icon_disc(x,y,size,16,16,12,accent);
+        icon_rect(x,y,size,14,13,4,11,bg);
+        icon_rect(x,y,size,14,8,4,3,bg);
+    } else if (app == 7) {
+        icon_rect(x,y,size,14,22,4,4,accent);
+        icon_rect(x,y,size,10,17,12,3,accent);
+        icon_rect(x,y,size,6,12,20,3,accent);
+        icon_rect(x,y,size,3,7,26,3,accent);
+    } else if (app == 8) {
+        icon_disc(x,y,size,11,12,6,accent);
+        icon_disc(x,y,size,23,13,5,accent);
+        icon_rect(x,y,size,4,20,15,8,accent);
+        icon_rect(x,y,size,18,21,11,7,accent);
+    } else if (app == 9) {
+        icon_rect(x,y,size,4,6,24,18,accent);
+        icon_rect(x,y,size,8,24,6,4,accent);
+        icon_rect(x,y,size,9,12,14,2,white);
+        icon_rect(x,y,size,9,17,10,2,white);
+    } else {
+        icon_rect(x,y,size,5,5,22,22,blue);
+        icon_rect(x,y,size,13,10,6,12,white);
+    }
+}
+
 static int active_app = APP_NONE;
 static int launcher_open = 0;
 static int window_x = -1;
@@ -395,7 +505,8 @@ static void draw_active_window(void) {
     fill_rect(x, y, width, 38, rgb(35, 57, 91));
     fill_rect(x + width - 34, y + 7, 24, 24, rgb(190, 65, 78));
     draw_string("X", x + width - 27, y + 15, 2, rgb(255, 255, 255));
-    draw_string(app->name, x + 18, y + 14, 2, rgb(240, 246, 255));
+    draw_app_icon(active_app, x + 10, y + 4, 30);
+    draw_string(app->name, x + 48, y + 14, 2, rgb(240, 246, 255));
     draw_string(app->subtitle, x + 24, y + 68, 2, app->accent);
 
     if (active_app == APP_FILES) {
@@ -428,7 +539,8 @@ static void draw_active_window(void) {
         for (u32 i = 0; i < paint_point_count; i++)
             fill_rect(x + 24 + (u32)paint_points_x[i], y + 108 + (u32)paint_points_y[i], 5, 5, rgb(35, 105, 220));
     } else if (active_app == APP_ABOUT) {
-        draw_string("A SMALL OS WITH A BIG FUTURE", x + 24, y + 112, 1, rgb(225, 235, 250));
+        draw_blueapple_logo(x + 24, y + 104, 52, rgb(20, 31, 55));
+        draw_string("A SMALL OS WITH A BIG FUTURE", x + 88, y + 112, 1, rgb(225, 235, 250));
         draw_string("ORBIT UI", x + 24, y + 142, 1, rgb(225, 235, 250));
         draw_string("BLUEAPPLE V1 IS IN DEVELOPMENT", x + 24, y + 172, 1, rgb(225, 235, 250));
     } else if (active_app == APP_WIFI) {
@@ -467,7 +579,8 @@ static void draw_launcher(void) {
     for (u32 i = 0; i < ORBIT_APP_COUNT; i++) {
         u32 row_y = y + 44 + i * 44;
         fill_rect(x + 10, row_y, width - 20, row_height, rgb(34, 66, 105));
-        draw_string(orbit_apps[i].name, x + 22, row_y + 15, 1, rgb(240, 246, 255));
+        draw_app_icon(orbit_apps[i].id, x + 17, row_y + 6, 26);
+        draw_string(orbit_apps[i].name, x + 54, row_y + 15, 1, rgb(240, 246, 255));
     }
 }
 static void render_desktop(void) {
