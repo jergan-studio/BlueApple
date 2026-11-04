@@ -560,9 +560,26 @@ static void draw_active_window(void) {
         draw_string(terminal_line, x + 38, y + 178, 1, rgb(240, 246, 255));
         draw_string(terminal_output, x + 24, y + 214, 1, rgb(105, 225, 175));
     } else if (active_app == APP_WEB) {
-        draw_string("ORBIT WEB // OFFLINE START PAGE", x + 24, y + 108, 1, rgb(225, 235, 250));
-        draw_string("NETWORK DRIVER NOT INSTALLED", x + 24, y + 142, 1, rgb(175, 195, 225));
-        draw_string("NO INTERNET CONNECTION", x + 24, y + 172, 1, rgb(175, 195, 225));
+        draw_string("ORBIT WEB // NETWORK STATUS", x + 24, y + 108, 1, rgb(225, 235, 250));
+        if (!e1000_link_up()) {
+            draw_string("VIRTUAL ETHERNET: LINK DOWN", x + 24, y + 142, 1, rgb(240, 185, 110));
+            draw_string("CHECK QEMU E1000 ADAPTER", x + 24, y + 172, 1, rgb(175, 195, 225));
+        } else if (!net_is_configured()) {
+            draw_string("E1000 ADAPTER: DETECTED", x + 24, y + 142, 1, rgb(105, 225, 175));
+            draw_string("DHCP: REQUESTING ADDRESS", x + 24, y + 172, 1, rgb(240, 185, 110));
+        } else {
+            u32 ip = net_ipv4_address();
+            draw_string("E1000: CONNECTED // DHCP OK", x + 24, y + 142, 1, rgb(105, 225, 175));
+            draw_string("IP ADDRESS:", x + 24, y + 172, 1, rgb(225, 235, 250));
+            draw_number((ip >> 24) & 255, x + 112, y + 172, 1, rgb(105, 225, 175));
+            draw_string(".", x + 130, y + 172, 1, rgb(225, 235, 250));
+            draw_number((ip >> 16) & 255, x + 138, y + 172, 1, rgb(105, 225, 175));
+            draw_string(".", x + 156, y + 172, 1, rgb(225, 235, 250));
+            draw_number((ip >> 8) & 255, x + 164, y + 172, 1, rgb(105, 225, 175));
+            draw_string(".", x + 182, y + 172, 1, rgb(225, 235, 250));
+            draw_number(ip & 255, x + 190, y + 172, 1, rgb(105, 225, 175));
+        }
+        draw_string("WEB BROWSING: DNS / TCP NOT READY", x + 24, y + 208, 1, rgb(175, 195, 225));
     } else if (active_app == APP_PAINT) {
         fill_round_rect(x + 24, y + 108, width - 48, height - 132, 9, rgb(235, 239, 247));
         draw_string("CLICK CANVAS TO PAINT", x + 34, y + 90, 1, rgb(240, 246, 255));
@@ -574,11 +591,11 @@ static void draw_active_window(void) {
         draw_string("ORBIT UI", x + 24, y + 142, 1, rgb(225, 235, 250));
         draw_string("BLUEAPPLE V1 IS IN DEVELOPMENT", x + 24, y + 172, 1, rgb(225, 235, 250));
     } else if (active_app == APP_WIFI) {
-        draw_string("WIRELESS STATUS", x + 24, y + 108, 1, rgb(225, 235, 250));
-        draw_string("WIFI RADIO: NOT CONNECTED", x + 24, y + 140, 1, rgb(240, 185, 110));
-        draw_string("NO WIFI DEVICE DRIVER YET", x + 24, y + 172, 1, rgb(175, 195, 225));
-        draw_string("NETWORK SCANNING IS NOT ACTIVE", x + 24, y + 204, 1, rgb(175, 195, 225));
-        draw_string("ADAPTER SUPPORT IS NEXT", x + 24, y + 236, 1, rgb(105, 185, 255));
+        draw_string("NETWORK ADAPTER STATUS", x + 24, y + 108, 1, rgb(225, 235, 250));
+        draw_string("QEMU VIRTUAL ETHERNET (E1000)", x + 24, y + 140, 1, rgb(175, 195, 225));
+        draw_string(e1000_link_up() ? "LINK: UP" : "LINK: DOWN", x + 24, y + 172, 1, e1000_link_up() ? rgb(105, 225, 175) : rgb(240, 185, 110));
+        draw_string(net_is_configured() ? "DHCP: ADDRESS RECEIVED" : "DHCP: WAITING FOR ADDRESS", x + 24, y + 204, 1, net_is_configured() ? rgb(105, 225, 175) : rgb(240, 185, 110));
+        draw_string("THIS IS ETHERNET, NOT WIFI", x + 24, y + 236, 1, rgb(175, 195, 225));
     } else if (active_app == APP_USERS) {
         draw_string("CURRENT PROFILE", x + 24, y + 108, 1, rgb(225, 235, 250));
         draw_string(current_username, x + 24, y + 140, 2, rgb(105, 185, 255));
